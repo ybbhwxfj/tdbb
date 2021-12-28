@@ -34,7 +34,8 @@ RUN \
 RUN pip3 install \
     paramiko
 
-COPY . /root/block-db
+RUN git clone git@github.com:ybbh/block-db.git
+
 RUN cd /root/block-db && \
     cd third_party && \
     bash ../script/build_third_party.sh
@@ -47,12 +48,9 @@ RUN rm -rf /root/block-db/third_party/include
 RUN rm -rf /root/block-db/third_party/lib
 RUN rm -rf /root/block-db/third_party/bin
 
-
 RUN rm -rf /root/.ssh
 RUN ssh-keygen -q -t rsa -N '' -f /root/.ssh/id_rsa
 RUN cat /root/.ssh/id_rsa.pub > /root/.ssh/authorized_keys
-
-COPY . /root/block-db
 
 RUN echo 'Asia/Shanghai' > /etc/timezone
 
