@@ -1,0 +1,29 @@
+syntax = "proto3";
+
+import "tx_operation.proto";
+
+enum tx_cmd_type {
+  TX_CMD_RM_READ = 0;
+  TX_CMD_RM_WRITE = 1;
+  TX_CMD_RM_BEGIN = 2;
+  TX_CMD_RM_PREPARE_COMMIT = 3;
+  TX_CMD_RM_PREPARE_ABORT = 4;
+  TX_CMD_RM_COMMIT = 5;
+  TX_CMD_RM_ABORT = 6;
+
+  TX_CMD_TM_BEGIN = 7;
+  TX_CMD_TM_COMMIT = 8;
+  TX_CMD_TM_ABORT = 9;
+  TX_CMD_TM_END = 10;
+
+  TX_CMD_REPLAY_DSB = 11;
+  RAFT_LOG_ENTRY = 12;
+};
+
+message tx_log {
+  tx_cmd_type log_type = 1;
+  uint64 xid = 2;
+  uint64 index = 3;
+  uint64 term = 4;
+  repeated tx_operation operations = 5;
+}

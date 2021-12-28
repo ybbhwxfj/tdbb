@@ -1,0 +1,9 @@
+syntax = "proto3";
+
+import "tuple.proto";
+
+message tuple_row {
+  uint64 table_id = 1;
+  uint64 tuple_id = 2;
+  tuple tuple = 3;
+}

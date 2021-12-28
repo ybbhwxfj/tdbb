@@ -1,0 +1,7 @@
+syntax = "proto3";
+
+message hello {
+  string message = 1;
+  int32 id = 2;
+  optional string payload = 3;
+}

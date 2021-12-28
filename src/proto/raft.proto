@@ -1,0 +1,52 @@
+syntax = "proto3";
+
+import "log_entry.proto";
+
+message transfer_leader {
+  uint32 source = 1;
+  uint32 dest = 2;
+  uint32 leader_transferee = 3;
+}
+
+message transfer_notify {
+  uint32 leader_transferee = 1;
+}
+
+message request_vote_request {
+  uint32 source = 1;
+  uint32 dest = 2;
+  uint64 term = 3;
+  uint64 last_log_index = 4;
+  uint64 last_log_term = 5;
+}
+
+message request_vote_response {
+  uint32 source = 1;
+  uint32 dest = 2;
+  uint64 term = 3;
+  bool vote_granted = 4;
+}
+
+message append_entries_request {
+  uint32 source = 1;
+  uint32 dest = 2;
+  uint64 term = 3;
+  uint64 prev_log_index = 4;
+  uint64 prev_log_term = 5;
+  uint64 commit_index = 6;
+  uint64 consistency_index = 7;
+  uint64 tick_sequence = 8;
+  bool heart_beat = 9;
+  repeated log_entry entries = 10;
+}
+
+message append_entries_response {
+  uint32 source = 1;
+  uint32 dest = 2;
+  uint64 term = 3;
+  bool success = 4;
+  uint64 match_index = 5;
+  uint32 lead = 6;
+  uint64 tick_sequence = 7;
+  bool heart_beat = 8;
+}

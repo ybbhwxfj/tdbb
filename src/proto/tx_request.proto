@@ -1,0 +1,54 @@
+syntax = "proto3";
+
+import "tx_operation.proto";
+
+message tx_request {
+  uint64 xid = 1;
+  uint32 source = 2;
+  uint32 dest = 3;
+  bool oneshot = 4;
+  bool distributed = 5;
+  bool client_request = 6;
+  repeated tx_operation operations = 7;
+}
+
+message tx_response {
+  uint32 error_code = 1;
+  uint32 lead = 2;
+  repeated tx_operation operations = 3;
+}
+
+
+message tx_rm_prepare {
+  uint64 xid = 1;
+  uint32 source_node = 2;
+  uint32 dest_node = 3;
+  uint32 source_rg = 4;
+  uint32 dest_rg = 5;
+  bool commit = 6;
+}
+
+message tx_tm_commit {
+  uint64 xid = 1;
+  uint32 source_node = 2;
+  uint32 dest_node = 3;
+  uint32 source_rg = 4;
+  uint32 dest_rg = 5;
+}
+
+message tx_tm_abort {
+  uint64 xid = 1;
+  uint32 source_node = 2;
+  uint32 dest_node = 3;
+  uint32 source_rg = 4;
+  uint32 dest_rg = 5;
+}
+
+message tx_rm_ack {
+  uint64 xid = 1;
+  uint32 source_node = 2;
+  uint32 dest_node = 3;
+  uint32 source_rg = 4;
+  uint32 dest_rg = 5;
+  bool commit = 6;
+}

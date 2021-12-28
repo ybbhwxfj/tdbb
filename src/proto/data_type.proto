@@ -1,0 +1,11 @@
+syntax = "proto3";
+
+enum data_type {
+  INT32 = 0;
+  INT64 = 1;
+  UINT32 = 2;
+  UINT64 = 3;
+  FLOAT32 = 4;
+  FLOAT64 = 5;
+  STRING = 6;
+};

@@ -1,0 +1,10 @@
+syntax = "proto3";
+
+
+enum pb_block_type {
+  PB_BLOCK_CCB = 0;
+  PB_BLOCK_DSB = 1;
+  PB_BLOCK_RLB = 2;
+  PB_BLOCK_CLIENT = 3;
+  PB_BLOCK_PNB = 4;
+}

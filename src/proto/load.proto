@@ -1,0 +1,11 @@
+syntax = "proto3";
+
+message client_load_data_request {
+  string workload = 1;
+  uint32 wid_upper = 2;
+  uint32 wid_lower = 3;
+}
+
+message client_load_data_response {
+  uint32 error_code = 1;
+}

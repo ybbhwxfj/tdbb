@@ -1,0 +1,713 @@
+{
+  "Table": [
+    {
+      "TableName": "ITEM",
+      "Column": [
+        {
+          "ColumnName": "I_ID",
+          "DataType": "INT64",
+          "Length": 4,
+          "Value": 1
+        },
+        {
+          "ColumnName": "I_IM_ID",
+          "DataType": "INT64",
+          "Length": 4,
+          "Value": 1
+        },
+        {
+          "ColumnName": "I_NAME",
+          "DataType": "STRING",
+          "Length": 24,
+          "Value": "Wang XXXXX"
+        },
+        {
+          "ColumnName": "I_PRICE",
+          "DataType": "INT64",
+          "Length": 4,
+          "Value": 100
+        },
+        {
+          "ColumnName": "I_DATA",
+          "DataType": "STRING",
+          "Length": 50,
+          "Value": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        }
+      ]
+    },
+    {
+      "TableName": "WAREHOUSE",
+      "Column": [
+        {
+          "ColumnName": "W_ID",
+          "DataType": "INT64",
+          "Length": 4,
+          "Value": 100
+        },
+        {
+          "ColumnName": "W_NAME",
+          "DataType": "STRING",
+          "Length": 10,
+          "Value": "Hangzhou"
+        },
+        {
+          "ColumnName": "W_STREET1",
+          "DataType": "STRING",
+          "Length": 20,
+          "Value": "Street XXX No 111"
+        },
+        {
+          "ColumnName": "W_STREET2",
+          "DataType": "STRING",
+          "Length": 20,
+          "Value": "Street XXX No 222"
+        },
+        {
+          "ColumnName": "W_CITY",
+          "DataType": "STRING",
+          "Length": 10,
+          "Value": "Hangzhou"
+        },
+        {
+          "ColumnName": "W_STATE",
+          "DataType": "STRING",
+          "Length": 10,
+          "Value": "ZJ"
+        },
+        {
+          "ColumnName": "W_ZIP",
+          "DataType": "STRING",
+          "Length": 10,
+          "Value": "ZJ"
+        },
+        {
+          "ColumnName": "W_TAX",
+          "DataType": "FLOAT64",
+          "Length": 4,
+          "Value": 0.1
+        },
+        {
+          "ColumnName": "W_YTD",
+          "DataType": "FLOAT64",
+          "Length": 4,
+          "Value": 300000.0
+        }
+      ]
+    },
+    {
+      "TableName": "STOCK",
+      "Column": [
+        {
+          "ColumnName": "S_I_ID",
+          "DataType": "INT64",
+          "Length": 4,
+          "Value": 100
+        },
+        {
+          "ColumnName": "S_W_ID",
+          "DataType": "INT64",
+          "Length": 10,
+          "Value": 1
+        },
+        {
+          "ColumnName": "S_QUANTITY",
+          "DataType": "INT64",
+          "Length": 4,
+          "Value": 100
+        },
+        {
+          "ColumnName": "S_DIST_01",
+          "DataType": "STRING",
+          "Length": 24,
+          "Value": "1234567890-=1234567890-="
+        },
+        {
+          "ColumnName": "S_DIST_02",
+          "DataType": "STRING",
+          "Length": 24,
+          "Value": "1234567890-=1234567890-="
+        },
+        {
+          "ColumnName": "S_DIST_03",
+          "DataType": "STRING",
+          "Length": 24,
+          "Value": "1234567890-=1234567890-="
+        },
+        {
+          "ColumnName": "S_DIST_04",
+          "DataType": "STRING",
+          "Length": 24,
+          "Value": "1234567890-=1234567890-="
+        },
+        {
+          "ColumnName": "S_DIST_05",
+          "DataType": "STRING",
+          "Length": 24,
+          "Value": "1234567890-=1234567890-="
+        },
+        {
+          "ColumnName": "S_DIST_06",
+          "DataType": "STRING",
+          "Length": 24,
+          "Value": "1234567890-=1234567890-="
+        },
+        {
+          "ColumnName": "S_DIST_07",
+          "DataType": "STRING",
+          "Length": 24,
+          "Value": "1234567890-=1234567890-="
+        },
+        {
+          "ColumnName": "S_DIST_08",
+          "DataType": "STRING",
+          "Length": 24,
+          "Value": "1234567890-=1234567890-="
+        },
+        {
+          "ColumnName": "S_DIST_09",
+          "DataType": "STRING",
+          "Length": 24,
+          "Value": "1234567890-=1234567890-="
+        },
+        {
+          "ColumnName": "S_DIST_10",
+          "DataType": "STRING",
+          "Length": 24,
+          "Value": "1234567890-=1234567890-="
+        },
+        {
+          "ColumnName": "S_YTD",
+          "DataType": "INT64",
+          "Length": 4,
+          "Value": 0
+        },
+        {
+          "ColumnName": "S_ORDER_CNT",
+          "DataType": "INT64",
+          "Length": 4,
+          "Value": 0
+        },
+        {
+          "ColumnName": "S_REMOTE_CNT",
+          "DataType": "INT64",
+          "Length": 4,
+          "Value": 0
+        },
+        {
+          "ColumnName": "S_DATA",
+          "DataType": "STRING",
+          "Length": 50,
+          "Value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      ]
+    },
+    {
+      "TableName": "DISTRICT",
+      "Column": [
+        {
+          "ColumnName": "D_ID",
+          "DataType": "INT64",
+          "Length": 4,
+          "Value": 100
+        },
+        {
+          "ColumnName": "D_W_ID",
+          "DataType": "INT64",
+          "Length": 10,
+          "Value": 1
+        },
+        {
+          "ColumnName": "D_NAME",
+          "DataType": "STRING",
+          "Length": 10,
+          "Value": "D_NAME"
+        },
+        {
+          "ColumnName": "D_STREET_1",
+          "DataType": "STRING",
+          "Length": 20,
+          "Value": "D_STREET_1"
+        },
+        {
+          "ColumnName": "D_STREET_2",
+          "DataType": "STRING",
+          "Length": 20,
+          "Value": "D_STREET_2"
+        },
+        {
+          "ColumnName": "D_CITY",
+          "DataType": "STRING",
+          "Length": 20,
+          "Value": "D_CITY"
+        },
+        {
+          "ColumnName": "D_STATE",
+          "DataType": "STRING",
+          "Length": 2,
+          "Value": "D_STATE"
+        },
+        {
+          "ColumnName": "D_ZIP",
+          "DataType": "STRING",
+          "Length": 2,
+          "Value": "D_STATE"
+        },
+        {
+          "ColumnName": "D_TAX",
+          "DataType": "FLOAT64",
+          "Length": 2,
+          "Value": 0.1
+        },
+        {
+          "ColumnName": "D_YTD",
+          "DataType": "FLOAT64",
+          "Length": 4,
+          "Value": 30000.00
+        },
+        {
+          "ColumnName": "D_NEXT_O_ID ",
+          "DataType": "INT64",
+          "Length": 4,
+          "Value": 3001
+        }
+      ]
+    },
+    {
+      "TableName": "CUSTOMER",
+      "Column": [
+        {
+          "ColumnName": "C_ID",
+          "DataType": "INT64",
+          "Length": 4,
+          "Value": 100
+        },
+        {
+          "ColumnName": "C_D_ID",
+          "DataType": "INT64",
+          "Length": 4,
+          "Value": 1
+        },
+        {
+          "ColumnName": "C_W_ID",
+          "DataType": "INT64",
+          "Length": 4,
+          "Value": 1
+        },
+        {
+          "ColumnName": "C_LAST",
+          "DataType": "STRING",
+          "Length": 20,
+          "Value": "C_LAST"
+        },
+        {
+          "ColumnName": "C_MIDDLE",
+          "DataType": "STRING",
+          "Length": 20,
+          "Value": "C_MIDDLE"
+        },
+        {
+          "ColumnName": "C_FIRST",
+          "DataType": "STRING",
+          "Length": 20,
+          "Value": "C_FIRST"
+        },
+        {
+          "ColumnName": "C_STREET_1",
+          "DataType": "STRING",
+          "Length": 20,
+          "Value": "C_STREET_1"
+        },
+        {
+          "ColumnName": "C_STREET_2",
+          "DataType": "STRING",
+          "Length": 20,
+          "Value": "C_STREET_2"
+        },
+        {
+          "ColumnName": "C_CITY",
+          "DataType": "STRING",
+          "Length": 20,
+          "Value": "C_CITY"
+        },
+        {
+          "ColumnName": "C_STATE",
+          "DataType": "STRING",
+          "Length": 20,
+          "Value": "C_STATE"
+        },
+        {
+          "ColumnName": "C_ZIP",
+          "DataType": "STRING",
+          "Length": 20,
+          "Value": "C_ZIP"
+        },
+        {
+          "ColumnName": "C_PHONE",
+          "DataType": "STRING",
+          "Length": 20,
+          "Value": "C_PHONE"
+        },
+        {
+          "ColumnName": "C_SINCE",
+          "DataType": "STRING",
+          "Length": 20,
+          "Value": "C_SINCE"
+        },
+        {
+          "ColumnName": "C_CREDIT",
+          "DataType": "STRING",
+          "Length": 20,
+          "Value": "C_SINCE"
+        },
+        {
+          "ColumnName": "C_CREDIT_LIM",
+          "DataType": "STRING",
+          "Length": 20,
+          "Value": "C_SINCE"
+        },
+        {
+          "ColumnName": "C_DISCOUNT",
+          "DataType": "FLOAT64",
+          "Length": 4,
+          "Value": 0.5
+        },
+        {
+          "ColumnName": "C_BALANCE",
+          "DataType": "INT64",
+          "Length": 4,
+          "Value": -10
+        },
+        {
+          "ColumnName": "C_YTD_PAYMENT",
+          "DataType": "INT64",
+          "Length": 4,
+          "Value": 10
+        },
+        {
+          "ColumnName": "C_PAYMENT_CNT",
+          "DataType": "INT64",
+          "Length": 4,
+          "Value": 1
+        },
+        {
+          "ColumnName": "C_DELIVERY_CNT",
+          "DataType": "INT64",
+          "Length": 4,
+          "Value": 0
+        },
+        {
+          "ColumnName": "C_DATA",
+          "DataType": "INT64",
+          "Length": 10,
+          "Value": 300
+        }
+      ]
+    },
+    {
+      "TableName": "CUST_LAST_INDEX",
+      "Column": [
+        {
+          "ColumnName": "C_ID",
+          "DataType": "INT64",
+          "Length": 4,
+          "Value": 100
+        },
+        {
+          "ColumnName": "C_D_ID",
+          "DataType": "INT64",
+          "Length": 4,
+          "Value": 1
+        },
+        {
+          "ColumnName": "C_W_ID",
+          "DataType": "INT64",
+          "Length": 4,
+          "Value": 1
+        },
+        {
+          "ColumnName": "C_LAST",
+          "DataType": "STRING",
+          "Length": 20,
+          "Value": "C_LAST"
+        }
+      ]
+    },
+    {
+      "TableName": "HISTORY",
+      "Column": [
+        {
+          "ColumnName": "H_C_ID",
+          "DataType": "INT64",
+          "Length": 4,
+          "Value": 100
+        },
+        {
+          "ColumnName": "H_C_D_ID",
+          "DataType": "INT64",
+          "Length": 4,
+          "Value": 1
+        },
+        {
+          "ColumnName": "H_C_W_ID",
+          "DataType": "INT64",
+          "Length": 4,
+          "Value": 1
+        },
+        {
+          "ColumnName": "H_DATE",
+          "DataType": "STRING",
+          "Length": 4,
+          "Value": "H_DATE"
+        },
+        {
+          "ColumnName": "H_AMOUNT",
+          "DataType": "INT64",
+          "Length": 4,
+          "Value": 10
+        },
+        {
+          "ColumnName": "H_DATA",
+          "DataType": "STRING",
+          "Length": 20,
+          "Value": "H_DATA"
+        }
+      ]
+    },
+    {
+      "TableName": "ORDER",
+      "Column": [
+        {
+          "ColumnName": "O_ID",
+          "DataType": "INT64",
+          "Length": 4,
+          "Value": 100
+        },
+        {
+          "ColumnName": "O_C_ID",
+          "DataType": "INT64",
+          "Length": 4,
+          "Value": 1
+        },
+        {
+          "ColumnName": "O_D_ID",
+          "DataType": "INT64",
+          "Length": 4,
+          "Value": 1
+        },
+        {
+          "ColumnName": "O_W_ID",
+          "DataType": "INT64",
+          "Length": 4,
+          "Value": 1
+        },
+        {
+          "ColumnName": "O_ENTRY_D",
+          "DataType": "STRING",
+          "Length": 4,
+          "Value": "O_ENTRY_D"
+        },
+        {
+          "ColumnName": "O_CARRIER_ID",
+          "DataType": "INT64",
+          "Length": 4,
+          "Value": 1
+        },
+        {
+          "ColumnName": "O_OL_CNT",
+          "DataType": "INT64",
+          "Length": 4,
+          "Value": 1
+        },
+        {
+          "ColumnName": "O_ALL_LOCAL",
+          "DataType": "INT64",
+          "Length": 4,
+          "Value": 1
+        }
+      ]
+    },
+    {
+      "TableName": "NEW_ORDER",
+      "Column": [
+        {
+          "ColumnName": "O_ID",
+          "DataType": "INT64",
+          "Length": 4,
+          "Value": 100
+        },
+        {
+          "ColumnName": "O_C_ID",
+          "DataType": "INT64",
+          "Length": 4,
+          "Value": 1
+        },
+        {
+          "ColumnName": "O_D_ID",
+          "DataType": "INT64",
+          "Length": 4,
+          "Value": 1
+        },
+        {
+          "ColumnName": "O_W_ID",
+          "DataType": "INT64",
+          "Length": 4,
+          "Value": 1
+        },
+        {
+          "ColumnName": "O_ENTRY_D",
+          "DataType": "STRING",
+          "Length": 4,
+          "Value": "O_ENTRY_D"
+        },
+        {
+          "ColumnName": "O_CARRIER_ID",
+          "DataType": "INT64",
+          "Length": 4,
+          "Value": 1
+        },
+        {
+          "ColumnName": "O_OL_CNT",
+          "DataType": "INT64",
+          "Length": 4,
+          "Value": 1
+        },
+        {
+          "ColumnName": "O_ALL_LOCAL",
+          "DataType": "INT64",
+          "Length": 4,
+          "Value": 1
+        }
+      ]
+    },
+    {
+      "TableName": "ORDER_LINE",
+      "Column": [
+        {
+          "ColumnName": "OL_O_ID",
+          "DataType": "INT64",
+          "Length": 4,
+          "Value": 100
+        },
+        {
+          "ColumnName": "OL_O_D_ID",
+          "DataType": "INT64",
+          "Length": 4,
+          "Value": 1
+        },
+        {
+          "ColumnName": "OL_O_W_ID",
+          "DataType": "INT64",
+          "Length": 4,
+          "Value": 1
+        },
+        {
+          "ColumnName": "OL_NUMBER",
+          "DataType": "INT64",
+          "Length": 4,
+          "Value": 1
+        },
+        {
+          "ColumnName": "OL_I_ID",
+          "DataType": "INT64",
+          "Length": 4,
+          "Value": 1
+        },
+        {
+          "ColumnName": "OL_SUPPLY_W_ID",
+          "DataType": "INT64",
+          "Length": 4,
+          "Value": 1
+        },
+        {
+          "ColumnName": "OL_DELIVERY_D",
+          "DataType": "INT64",
+          "Length": 4,
+          "Value": 1
+        },
+        {
+          "ColumnName": "OL_QUANTITY",
+          "DataType": "INT64",
+          "Length": 4,
+          "Value": 5
+        },
+        {
+          "ColumnName": "OL_AMOUNT",
+          "DataType": "INT64",
+          "Length": 4,
+          "Value": 5
+        },
+        {
+          "ColumnName": "OL_DIST_INFO",
+          "DataType": "STRING",
+          "Length": 24,
+          "Value": "OL_DIST_INFO"
+        }
+      ]
+    },
+    {
+      "TableName": "MAIN",
+      "Column": [
+        {
+          "ColumnName": "C_1",
+          "DataType": "INT64",
+          "Length": 4,
+          "Value": 100
+        },
+        {
+          "ColumnName": "C_2",
+          "DataType": "INT64",
+          "Length": 4,
+          "Value": 1
+        },
+        {
+          "ColumnName": "C_3",
+          "DataType": "INT64",
+          "Length": 4,
+          "Value": 1
+        },
+        {
+          "ColumnName": "C_4",
+          "DataType": "INT64",
+          "Length": 4,
+          "Value": 1
+        },
+        {
+          "ColumnName": "C_5",
+          "DataType": "INT64",
+          "Length": 4,
+          "Value": 1
+        },
+        {
+          "ColumnName": "C_6",
+          "DataType": "INT64",
+          "Length": 4,
+          "Value": 1
+        },
+        {
+          "ColumnName": "C_7",
+          "DataType": "STRING",
+          "Length": 4,
+          "Value": "C_7"
+        },
+        {
+          "ColumnName": "C_8",
+          "DataType": "STRING",
+          "Length": 4,
+          "Value": "C_8"
+        },
+        {
+          "ColumnName": "C_9",
+          "DataType": "STRING",
+          "Length": 4,
+          "Value": "C_9"
+        },
+        {
+          "ColumnName": "C_10",
+          "DataType": "STRING",
+          "Length": 24,
+          "Value": "C_10"
+        }
+      ]
+    }
+  ]
+}

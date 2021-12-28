@@ -1,0 +1,39 @@
+syntax = "proto3";
+import "block_type.proto";
+
+enum panel_report_msg_type {
+  RLB_NEW_TERM = 0;
+  CCB_REGISTERED_RLB = 1;
+  DSB_REGISTERED_RLB = 2;
+}
+
+message panel_report {
+  panel_report_msg_type report_type = 1;
+  uint32 source = 2;
+  uint32 dest = 3;
+  uint32 registered = 4;
+  bool lead = 5;
+}
+
+message panel_report_ack {
+  panel_report_msg_type report_type = 1;
+  uint32 source = 2;
+  uint32 dest = 3;
+}
+
+message panel_info_request {
+  uint32 source = 1;
+  uint32 dest = 2;
+  pb_block_type block_type = 3;
+}
+
+message panel_info_response {
+  uint32 source = 1;
+  uint32 dest = 2;
+  repeated uint32 rlb_leader = 3;
+  repeated uint32 rlb_follower = 4;
+  repeated uint32 ccb_leader = 5;
+  repeated uint32 ccb_follower = 6;
+  repeated uint32 dsb_leader = 7;
+  repeated uint32 dsb_follower = 8;
+}

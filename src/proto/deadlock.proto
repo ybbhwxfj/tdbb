@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+message dependency {
+  uint64 in = 1;
+  repeated uint64 out = 2;
+};
+
+message xid_seq {
+  uint64 xid = 1;
+  uint64 seq = 2;
+}
+
+message dependency_set {
+  uint64 sequence = 1;
+  repeated dependency dep = 2;
+  repeated xid_seq victim = 3;
+  repeated xid_seq finish = 4;
+}
+
+message dependency_set_array {
+  repeated dependency_set array = 1;
+}

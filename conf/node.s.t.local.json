@@ -1,0 +1,54 @@
+{
+  "node_server_list": [
+    {
+      "zone_name": "aazheyuan",
+      "shard_name": "s1",
+      "node_name": "node_s1_raazheyuan",
+      "address": "127.0.0.1",
+      "private_address": "127.0.0.1",
+      "port": 8011,
+      "block_type": [
+        "CCB",
+        "RLB",
+        "DSB"
+      ]
+    },
+    {
+      "zone_name": "azhangzhou",
+      "shard_name": "s1",
+      "node_name": "node_s1_razhangzhou",
+      "address": "127.0.0.1",
+      "private_address": "127.0.0.1",
+      "port": 8021,
+      "block_type": [
+        "CCB",
+        "RLB",
+        "DSB"
+      ]
+    },
+    {
+      "zone_name": "azhohhot",
+      "shard_name": "s1",
+      "node_name": "node_s1_razhohhot",
+      "address": "127.0.0.1",
+      "private_address": "127.0.0.1",
+      "port": 8031,
+      "block_type": [
+        "CCB",
+        "RLB",
+        "DSB"
+      ]
+    }
+  ],
+  "node_client": {
+    "zone_name": "azhohhot",
+    "shard_name": "",
+    "node_name": "client",
+    "address": "127.0.0.1",
+    "private_address": "127.0.0.1",
+    "port": 8000,
+    "block_type": [
+      "CLIENT"
+    ]
+  }
+}

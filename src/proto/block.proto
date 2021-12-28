@@ -1,0 +1,115 @@
+syntax = "proto3";
+
+import "tuple_row.proto";
+import "tx_log.proto";
+
+message ccb_register_ccb_request {
+  uint32 source = 1;
+  uint32 dest = 2;
+  uint64 cno = 3;
+  bool is_lead = 4;
+}
+
+message rlb_register_ccb_response {
+  uint32 source = 1;
+  uint32 dest = 2;
+  uint64 cno = 3;
+  uint32 lead_node = 4;
+  uint32 dsb_node = 5;
+  bool is_lead = 6;
+  repeated  tx_log logs = 7;
+}
+
+message ccb_read_request {
+  uint32 source = 1;
+  uint32 dest = 2;
+  uint64 cno = 3;
+  uint64 xid = 4;
+  uint32 oid = 5;
+  uint64 table_id = 6;
+  uint64 tuple_id = 7;
+}
+
+message dsb_read_response {
+  uint32 source = 1;
+  uint32 dest = 2;
+  uint32 table_id = 3;
+  uint64 cno = 4;
+  uint64 xid = 5;
+  uint32 oid = 6;
+  uint32 error_code = 7;
+  tuple_row tuple_row = 8;
+}
+
+message ccb_append_log_request {
+  uint32 source = 1;
+  uint32 dest = 2;
+  uint64 cno = 3;
+  uint32 oid = 4;
+
+  repeated tx_log logs = 6;
+}
+
+message rlb_commit_entries {
+  uint32 source = 1;
+  uint32 dest = 2;
+  uint64 cno = 3;
+  uint32 error_code = 4;
+  uint32 lead = 5;
+  repeated tx_log logs = 6;
+}
+
+
+message dsb_register_dsb_request {
+  uint32 source = 1;
+  uint32 dest = 2;
+  uint64 cno = 3;
+}
+
+message rlb_register_dsb_response {
+  uint32 source = 1;
+  uint32 dest = 2;
+  uint64 cno = 3;
+  bool lead = 4;
+  repeated  tx_log logs = 5;
+}
+
+message rlb_report_status_to_ccb {
+  uint32 source = 1;
+  uint32 dest = 2;
+  uint32 rg_id = 3;
+  uint64 cno = 4;
+  bool lead = 5;
+}
+
+message ccb_report_status_response {
+  uint32 source = 1;
+  uint32 dest = 2;
+  uint64 cno = 3;
+}
+
+message ccb_broadcast_status {
+  uint32 source = 1;
+  uint32 dest = 2;
+  uint32 rg_id = 3;
+  uint64 cno = 4;
+  bool lead = 5;
+}
+
+message ccb_broadcast_status_response {
+  uint32 source = 1;
+  uint32 dest = 2;
+  uint64 cno = 3;
+}
+
+message lead_status_request {
+  uint32 source = 1;
+  uint32 dest = 2;
+}
+
+message lead_status_response {
+  uint32 source = 1;
+  uint32 dest = 2;
+  uint32 rg_lead = 3;
+  repeated uint32 lead = 4;
+}

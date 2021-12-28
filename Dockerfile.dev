@@ -1,0 +1,64 @@
+FROM ubuntu:22.04 AS block-dev
+ENV DEBIAN_FRONTEND noninteractive
+
+RUN \
+    apt-get update && \
+    apt-get -y dist-upgrade && \
+    apt-get install -y \
+    software-properties-common \
+    wget \
+    make \
+    g++ \
+    cmake \
+    zlib1g \
+    zlib1g-dev \
+    libsnappy-dev \
+    libzstd-dev \
+    libbz2-dev \
+    liblz4-dev \
+    libgflags-dev \
+    liburing-dev \
+    git \
+    vim \
+    openssh-client \
+    openssh-server \
+    openssh-sftp-server \
+    python3 \
+    python3-pip \
+    net-tools \
+    iputils-ping \
+    iproute2 \
+    rsync \
+    gdb
+
+RUN pip3 install \
+    paramiko
+
+COPY . /root/block-db
+RUN cd /root/block-db && \
+    cd third_party && \
+    bash ../script/build_third_party.sh
+
+# copy include and lib to system path
+RUN cp -r /root/block-db/third_party/include /usr
+RUN cp -r /root/block-db/third_party/lib /usr
+RUN cp -r /root/block-db/third_party/bin /usr
+RUN rm -rf /root/block-db/third_party/include
+RUN rm -rf /root/block-db/third_party/lib
+RUN rm -rf /root/block-db/third_party/bin
+
+
+RUN rm -rf /root/.ssh
+RUN ssh-keygen -q -t rsa -N '' -f /root/.ssh/id_rsa
+RUN cat /root/.ssh/id_rsa.pub > /root/.ssh/authorized_keys
+
+COPY . /root/block-db
+
+RUN echo 'Asia/Shanghai' > /etc/timezone
+
+RUN rm /etc/security/limits.conf && \
+    echo 'root    soft    nofile  50000 ' >> /etc/security/limits.conf && \
+    echo 'root    hard    nofile  50000 ' >> /etc/security/limits.conf && \
+    echo 'root    soft    core  unlimited ' >> /etc/security/limits.conf && \
+    echo 'root    hard    core  unlimited ' >> /etc/security/limits.conf
+

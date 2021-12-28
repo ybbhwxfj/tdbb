@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+import "tx_request.proto";
+import "tx_operation.proto";
+
+message calvin_epoch {
+  uint64 source = 1;
+  uint64 dest = 2;
+  uint64 epoch = 3;
+  repeated tx_request request = 4;
+}
+
+message calvin_epoch_ack {
+  uint64 source = 1;
+  uint64 dest = 2;
+  uint64 epoch = 3;
+}
+
+message calvin_part_commit {
+  uint32 source = 1;
+  uint32 dest = 2;
+  uint64 xid = 3;
+  repeated tx_operation response = 4;
+}

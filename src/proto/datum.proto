@@ -1,0 +1,8 @@
+syntax = "proto3";
+
+import "data_type.proto";
+
+message datum {
+  data_type type = 1;
+  bytes binary = 2;
+}

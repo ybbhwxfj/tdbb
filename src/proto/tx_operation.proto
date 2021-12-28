@@ -1,0 +1,28 @@
+syntax = "proto3";
+
+import "tuple_row.proto";
+
+enum tx_op_type {
+  TX_OP_ACCESS_BEGIN = 0;
+  TX_OP_READ = 1;
+  TX_OP_READ_FOR_WRITE = 2;
+  TX_OP_INSERT = 3;
+  TX_OP_UPDATE = 4;
+  TX_OP_DELETE = 5;
+  TX_OP_ACCESS_END = 6;
+};
+
+
+
+message tx_operation {
+  tx_op_type op_type = 1;
+  uint64 xid = 2;
+  uint32 rg_id = 3;
+  uint32 operation_id = 4;
+  uint32 index = 5;
+  uint32 term = 6;
+  tuple_row tuple_row = 7;
+  uint64 calvin_epoch = 8;
+  uint64 calvin_sequence = 9;
+  bool last_op = 10;
+}
