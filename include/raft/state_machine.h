@@ -106,7 +106,7 @@ private:
   std::deque<tx_log> tx_logs_;
   boost::posix_time::ptime start_;
 public:
-  state_machine(const config &conf,
+  explicit state_machine(const config &conf,
                 net_service *sender,
                 fn_on_become_leader fn_on_become_leader,
                 fn_on_become_follower fn_on_become_follower,
@@ -115,6 +115,9 @@ public:
                 ptr<log_service> ls
   );
 
+  const boost::posix_time::ptime & start_time() const {
+    return start_;
+  }
   result<void> ccb_append_log(const ccb_append_log_request &msg);
 
   result<void> append_entry(const ptr<log_entry> &entry);

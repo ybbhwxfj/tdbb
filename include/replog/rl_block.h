@@ -1,7 +1,9 @@
 #pragma once
 
-#include <stdint.h>
+#include <cstdint>
 #include <boost/enable_shared_from_this.hpp>
+#include <memory>
+#include <utility>
 #include "common/block.h"
 #include "network/sender.h"
 #include "raft/state_machine.h"
@@ -24,11 +26,12 @@ private:
   uint32_t ccb_node_id_;
   uint32_t dsb_node_id_;
   uint32_t rg_id_;
-  state_machine *state_machine_;
+  state_machine *state_machine_{};
   ptr<log_service_impl> log_service_;
   std::map<node_id_t, bool> ccb_responsed_;
   ptr<boost::asio::steady_timer> timer_send_report_;
   std::recursive_mutex mutex_;
+  boost::posix_time::ptime start_;
 public:
   rl_block(const config &conf, net_service *service,
            fn_become_leader f_become_leader,
@@ -37,16 +40,16 @@ public:
   )
       : conf_(conf),
         service_(service),
-        fn_become_leader_(f_become_leader),
-        fn_become_follower_(f_become_follower),
-        commit_entries_(f_commit_entries),
+        fn_become_leader_(std::move(f_become_leader)),
+        fn_become_follower_(std::move(f_become_follower)),
+        commit_entries_(std::move(f_commit_entries)),
         cno_(0),
         node_id_(conf.node_id()),
         node_name_(id_2_name(conf.node_id())),
         ccb_node_id_(0),
         dsb_node_id_(0),
         rg_id_(conf.rg_id()) {
-    log_service_ = ptr<log_service_impl>(new log_service_impl(conf, service_));
+    log_service_ = std::make_shared<log_service_impl>(conf, service_);
 
     fn_on_become_leader fn_bl = [this](uint64_t term) {
       on_become_leader(term);
@@ -64,18 +67,20 @@ public:
                                        fn_commit,
                                        log_service_
     );
+
+    start_ = state_machine_->start_time();
   }
 
-  virtual ~rl_block() {
+  ~rl_block() override {
     if (state_machine_) {
       delete state_machine_;
       state_machine_ = nullptr;
     }
   }
 
-  virtual void on_start();
-  virtual void on_stop();
-  virtual void handle_debug(const std::string &path, std::ostream &os);
+  virtual void on_start() override;
+  virtual void on_stop() override;
+  virtual void handle_debug(const std::string &path, std::ostream &os) override;
   template<typename T>
   result<void> handle_message(const ptr<connection> &c, message_type t, const T &m) {
     std::scoped_lock l(mutex_);

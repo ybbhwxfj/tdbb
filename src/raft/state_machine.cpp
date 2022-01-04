@@ -306,9 +306,13 @@ void state_machine::request_vote() {
 result<void> state_machine::ccb_append_log(const ccb_append_log_request &msg) {
   std::scoped_lock l(mutex_);
   auto &mutable_msg = const_cast<ccb_append_log_request &>(msg);
+  boost::posix_time::ptime now = boost::posix_time::microsec_clock::local_time();
+  uint64_t us = (now - start_).total_microseconds();
+
   for (tx_log &log: *mutable_msg.mutable_logs()) {
     tx_logs_.emplace_back();
     tx_logs_.rbegin()->Swap(&log);
+    tx_logs_.rbegin()->set_repl_latency(us);
     BOOST_LOG_TRIVIAL(trace) << node_name_ << "state machine ccb_append_log tx log " << log.xid();
   }
   //return send_append_log();
@@ -326,10 +330,12 @@ result<void> state_machine::send_append_log() {
     return outcome::success();
   }
 
+
   ptr<log_entry> entry(new log_entry());
   for (; not tx_logs_.empty();) {
     tx_log *log = entry->add_xlog();
     log->Swap(&tx_logs_.front());
+
     tx_logs_.pop_front();
   }
   auto r = append_entry(entry);
@@ -434,7 +440,7 @@ void state_machine::append_entries(progress &tracer) {
   if (ae.entries_size() > 0) {
     boost::posix_time::ptime pt = boost::posix_time::microsec_clock::local_time();
     uint64_t ms = (pt - start_).total_microseconds();
-    BOOST_LOG_TRIVIAL(trace) << node_name_ << " " << ms << "ms send append to " << id_2_name(id) << " next index: "
+    BOOST_LOG_TRIVIAL(trace) << node_name_ << " " << ms << "us send append to " << id_2_name(id) << " next index: "
                              << next_index <<
                              " [" << start_offset << ":" << start_offset + ae.entries_size() << "]";
     ae.set_heart_beat(ae.entries_size() == 0);

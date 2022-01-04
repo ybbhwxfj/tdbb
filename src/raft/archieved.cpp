@@ -10,7 +10,6 @@ void archieved::start() {
   dbm_ = new tkrzw::HashDBM();
   dbm_->OpenAdvanced("alog.tkh", true, tkrzw::File::OPEN_DEFAULT, tuning_params);
   dbm_->Set("key", "value");
-
 }
 
 void archieved::write_key_value_vector(key_value_vec &) {

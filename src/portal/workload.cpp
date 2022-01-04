@@ -4,6 +4,7 @@
 #include "common/tuple.h"
 #include "common/bench_result.h"
 #include "common/db_type.h"
+#include "common/time_tracer.h"
 #include "network/client.h"
 #include "network/db_client.h"
 #include <boost/date_time.hpp>
@@ -247,6 +248,14 @@ void workload::run_new_order(shard_id_t rg_id, uint32_t term_id) {
   uint32_t total = 0;
   per_terminal &pt = *td;
   std::vector<tx_request> &requests = pt.requests_;
+  time_tracer tracer;
+
+  time_duration duration_append_log ;
+  time_duration duration_replicate_log;
+  time_duration duration_read;
+  time_duration duration_lock_wait;
+  time_duration duration_part;
+  uint64_t num_part = 0;
   for (tx_request &t: requests) {
     if (stopped_) {
       break;
@@ -265,6 +274,7 @@ void workload::run_new_order(shard_id_t rg_id, uint32_t term_id) {
       continue;
     }
     BOOST_ASSERT(t.ByteSizeLong() != 0);
+    tracer.begin();
     result<void> send_res = cli->send_message(CLIENT_TX_REQ, t);
     if (!send_res) {
       pt.reset_database_connection();
@@ -279,7 +289,15 @@ void workload::run_new_order(shard_id_t rg_id, uint32_t term_id) {
     }
     EC ec = EC(response.error_code());
     if (ec == EC::EC_OK) {
+      tracer.end();
       commit++;
+
+      duration_append_log += boost::posix_time::microseconds(response.latency_append());
+      duration_replicate_log += boost::posix_time::microseconds(response.latency_replicate());;
+      duration_read += boost::posix_time::microseconds(response.latency_read());
+      duration_lock_wait += boost::posix_time::microseconds(response.latency_lock_wait());
+      duration_part += boost::posix_time::microseconds(response.latency_part());
+      num_part += response.access_part();
     } else {
       BOOST_LOG_TRIVIAL(trace) << "tx response error code :" << ec;
       if (ec != EC::EC_TX_ABORT) {
@@ -289,10 +307,24 @@ void workload::run_new_order(shard_id_t rg_id, uint32_t term_id) {
       }
     }
     if (total >= 10) {
-      pt.update(commit, abort, total);
+      pt.update(commit, abort, total, num_part, tracer.duration(),
+                duration_append_log,
+                duration_replicate_log,
+                duration_read,
+                duration_lock_wait,
+                duration_part
+      );
       total = 0;
       abort = 0;
       commit = 0;
+      num_part = 0;
+      duration_lock_wait =
+          duration_part =
+          duration_read =
+          duration_replicate_log =
+              duration_append_log =
+                  boost::posix_time::microseconds(0);
+      tracer.reset();
     }
   }
   pt.done_.store(true);
@@ -539,6 +571,34 @@ std::vector<tx_request> &workload::get_tx_request(per_terminal *td) {
   return td->requests_;
 }
 
+
+bench_result workload::tpm_statistic::compute_bench_result(uint32_t num_term) {
+  bench_result res;
+  if (duration.total_milliseconds() != 0 && num_tx != 0) {
+    double tps = double(num_commit) /
+        (double(duration.total_microseconds()) / 1000000.0) *
+        num_term;
+    double ar = double(num_abort) / double(num_tx);
+    std::stringstream latency_msg;
+    if (num_commit != 0) {
+      double latency =  commit_duration.total_milliseconds() / num_commit;
+      latency_msg <<  ", latency: " << latency << "ms";
+      res.set_latency(latency);
+      res.set_latency_read(duration_read.total_milliseconds() / num_commit);
+      res.set_latency_append(duration_append_log.total_milliseconds() / num_part);
+      res.set_latency_replicate(duration_replicate_log.total_milliseconds() / num_part);
+      res.set_latency_lock_wait(duration_lock_wait.total_milliseconds() / num_part);
+      res.set_latency_part(duration_part.total_milliseconds() / num_part);
+    } else {
+
+    }
+    BOOST_LOG_TRIVIAL(info) << "TPS : " << tps << ", ABORT RATE : " << ar << latency_msg.str();
+
+    res.set_abort(ar);
+    res.set_tpm(tps * 60);
+  }
+  return res;
+}
 void workload::output_final_result() {
   tpm_statistic r;
   uint32_t num_term = terminal_data_.size();
@@ -546,17 +606,7 @@ void workload::output_final_result() {
     r.add(result_[i]);
   }
 
-  bench_result res;
-  if (r.duration.total_milliseconds() != 0 && r.num_tx != 0) {
-    double tps = double(r.num_commit) /
-        (double(r.duration.total_microseconds()) / 1000000.0) *
-        num_term;
-    double ar = double(r.num_abort) / double(r.num_tx);
-    BOOST_LOG_TRIVIAL(info) << "total TPS : " << tps << ", ABORT RATE : " << ar;
-
-    res.set_abort(ar);
-    res.set_tpm(tps * 60);
-  }
+  bench_result res = r.compute_bench_result(num_term);
   boost::json::object j = res.to_json();
   std::stringstream ssm;
   ssm << j;
@@ -572,11 +622,27 @@ void workload::per_terminal::reset_database_connection() {
   client_conn_ = nullptr;
 }
 
-void workload::per_terminal::update(uint32_t commit, uint32_t abort, uint32_t total) {
+void workload::per_terminal::update(uint32_t commit, uint32_t abort, uint32_t total,
+                                    uint32_t num_part,
+                                    time_duration commit_duration,
+                                    time_duration duration_append_log,
+                                    time_duration duration_replicate_log,
+                                    time_duration duration_read,
+                                    time_duration duration_lock_wait,
+                                    time_duration duration_part
+
+) {
   std::scoped_lock l(mutex_);
   result_.num_commit += commit;
   result_.num_abort += abort;
   result_.num_tx += total;
+  result_.commit_duration += commit_duration;
+  result_.duration_append_log += duration_append_log;
+  result_.duration_replicate_log += duration_replicate_log;
+  result_.duration_read += duration_read;
+  result_.duration_lock_wait += duration_lock_wait;
+  result_.duration_part += duration_part;
+  result_.num_part += num_part;
 }
 
 workload::tpm_statistic workload::per_terminal::get_result() {
@@ -614,11 +680,7 @@ void workload::output_result() {
       stopped_.store(true);
       continue;
     }
-    double tps = double(total_result.num_commit) /
-        (double(total_result.duration.total_microseconds()) / 1000000.0) *
-        terminal_data_.size();
-    double ar = double(total_result.num_abort) / double(total_result.num_tx);
-    BOOST_LOG_TRIVIAL(info) << "TPS : " << tps << ", ABORT RATE : " << ar;
+    total_result.compute_bench_result(conf_.num_terminal());
 
     result_.push_back(total_result);
   }

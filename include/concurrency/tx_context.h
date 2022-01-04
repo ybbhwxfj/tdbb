@@ -7,6 +7,7 @@
 #include "common/ptr.hpp"
 #include "common/tuple.h"
 #include "common/enum_str.h"
+#include "common/time_tracer.h"
 #include "concurrency/tx.h"
 #include "concurrency/access_mgr.h"
 
@@ -94,6 +95,11 @@ private:
   std::unordered_map<xid_t, ptr<tx_context>> dep_in_set_;
   std::unordered_map<xid_t, ptr<tx_context>> dep_out_set_;
 #endif // DB_TYPE_GEO_REP_OPTIMIZE
+  time_tracer read_time_tracer_;
+  time_tracer append_time_tracer_;
+  time_tracer lock_wait_time_tracer_;
+  time_tracer part_time_tracer_;
+  uint64_t log_rep_delay_;
 public:
   tx_context(uint64_t xid, uint32_t node_id, uint32_t rlb_node_id, uint64_t cno,
              bool distributed, access_mgr *mgr, net_service *sender,
@@ -102,8 +108,6 @@ public:
   virtual ~tx_context() = default;
 
   void lock_acquire(EC ec, oid_t oid) override;
-
-  uint64_t xid() const { return tx::xid(); }
 
   bool distributed() const { return distributed_; }
 
@@ -136,13 +140,13 @@ public:
   void on_log_entry_commit(tx_cmd_type type);
 
   rm_state state() const;
-  rm_trace_state trace_state() const { return trace_state_; }
 
   void timeout_clean_up();
   void abort(EC ec);
   void add_dependency(const ptr<tx_wait_set> &ds);
   void async_wait_lock(fn_wait_lock fn);
   void debug_tx(std::ostream &os);
+  void log_rep_delay(uint64_t us);
 private:
   void read_data_from_dsb(
       uint32_t table_id, tuple_id_t key, uint32_t oid,

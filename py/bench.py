@@ -256,6 +256,12 @@ def run_block(address, run_dir, backend, output_result):
 
         output_result['abort'] = result['abort']
         output_result['tpm'] = result['tpm']
+        output_result['latency'] = result['latency']
+        output_result['latency_read'] = result['latency_read']
+        output_result['latency_append'] = result['latency_append']
+        output_result['latency_replicate'] = result['latency_replicate']
+        output_result['latency_lock_wait'] = result['latency_lock_wait']
+        output_result['latency_part'] = result['latency_part']
 
 
 def configure_node(
