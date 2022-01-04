@@ -1,7 +1,9 @@
 # block-db
 
-This repo is the source code of our research paper,
-*Highly Available Transactional System Building Blocks*(To appear)
+This repo is the source code of our research paper *Building Blocks for Cloud Transactional DBMS*(To appear).
+This paper aims to simplify cloud transactional DBMS development.
+
+
 # dependency
 
 ## on ubuntu 20.04
