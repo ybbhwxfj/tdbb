@@ -29,7 +29,12 @@ tx_coordinator::tx_coordinator(
       connection_(std::move(connection)), wal_(write_ahead_log), tm_state_(TM_IDLE),
       write_commit_log_(false), write_abort_log_(false), error_code_(EC::EC_OK), victim_(false),
       responsed_(false),
-      fn_tm_state_(std::move(fn)) {
+      fn_tm_state_(std::move(fn)),
+      latency_read_(0),
+      latency_replicate_(0),
+      latency_append_(0),
+      latency_lock_wait_(0),
+      latency_part_(0) {
   start_ = boost::posix_time::microsec_clock::local_time();
 }
 
@@ -162,6 +167,11 @@ void tx_coordinator::handle_tx_rm_prepare(const tx_rm_prepare &msg) {
   }
   if (iter->second.rm_state_ == RM_IDLE) {
     iter->second.rm_state_ = msg.commit() ? RM_PREPARE_COMMIT : RM_PREPARE_ABORT;
+    latency_read_ += msg.latency_read();
+    latency_replicate_ += msg.latency_replicate();
+    latency_append_ += msg.latency_append();
+    latency_lock_wait_ += msg.latency_lock_wait();
+    latency_part_ += msg.latency_part();
     step_tm_state_advance();
   } else {
     if (not victim_) {
@@ -289,6 +299,12 @@ void tx_coordinator::send_tx_response() {
 
   responsed_ = true;
   response_.set_error_code(uint32_t(error_code_));
+  response_.set_latency_part(latency_part_);
+  response_.set_latency_read(latency_read_);
+  response_.set_latency_replicate(latency_replicate_);
+  response_.set_latency_append(latency_append_);
+  response_.set_latency_lock_wait(latency_lock_wait_);
+  response_.set_access_part(rm_tracer_.size());
   result<void> r = connection_->async_send(CLIENT_TX_RESP, response_);
   if (!r) {
     BOOST_LOG_TRIVIAL(info) << "send client response error";

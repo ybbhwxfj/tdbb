@@ -2,6 +2,7 @@
 
 #include "common/id.h"
 #include "common/tuple.h"
+#include "common/bench_result.h"
 #include "common/uniform_generator.hpp"
 #include <random>
 #include <vector>
@@ -39,15 +40,29 @@ private:
     }
 
     time_duration duration;
+    time_duration commit_duration;
+    time_duration duration_append_log;
+    time_duration duration_replicate_log;
+    time_duration duration_read;
+    time_duration duration_lock_wait;
+    time_duration duration_part;
     uint32_t num_tx;
     uint32_t num_commit;
     uint32_t num_abort;
-
+    uint32_t num_part;
     void reset() {
-      duration = boost::posix_time::milliseconds(0);
-      num_tx = 0;
-      num_commit = 0;
-      num_abort = 0;
+      duration_part
+          = duration_lock_wait
+          = duration_replicate_log
+          = duration_append_log
+          = duration_read
+          = commit_duration
+          = duration = boost::posix_time::milliseconds(0);
+
+      num_part
+        = num_tx
+        = num_commit
+        = num_abort = 0;
     }
 
     void add(const tpm_statistic &r) {
@@ -55,7 +70,16 @@ private:
       num_commit += r.num_commit;
       num_abort += r.num_abort;
       num_tx += r.num_tx;
+      commit_duration += r.commit_duration;
+      duration_append_log += r.duration_append_log;
+      duration_replicate_log += r.duration_replicate_log;
+      duration_read += r.duration_read;
+      duration_lock_wait += r.duration_lock_wait;
+      duration_part += r.duration_part;
+      num_part += r.num_part;
     }
+
+    bench_result compute_bench_result(uint32_t num_term);
   };
 
   const static uint32_t PERCENT_BASE = 10000;
@@ -141,7 +165,15 @@ private:
     std::mutex mutex_;
     std::atomic<bool> done_;
     void reset_database_connection();
-    void update(uint32_t commit, uint32_t abort, uint32_t total);
+    void update(uint32_t commit, uint32_t abort, uint32_t total,
+                uint32_t num_part,
+                time_duration commit_duration,
+                time_duration duration_append_log,
+                time_duration duration_replicate_log,
+                time_duration duration_read,
+                time_duration duration_lock_wait,
+                time_duration duration_part
+    );
     tpm_statistic get_result();
   };
 

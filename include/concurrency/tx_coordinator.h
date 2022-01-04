@@ -85,6 +85,12 @@ private:
   boost::posix_time::ptime start_;
   bool responsed_;
   fn_tm_state fn_tm_state_;
+
+  uint64_t latency_read_;
+  uint64_t latency_replicate_;
+  uint64_t latency_append_;
+  uint64_t latency_lock_wait_;
+  uint64_t latency_part_;
 public:
   tx_coordinator(uint64_t xid, uint32_t node_id,
                  std::unordered_map<shard_id_t, node_id_t> lead_node,

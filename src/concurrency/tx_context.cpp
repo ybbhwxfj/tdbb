@@ -43,7 +43,8 @@ tx_context::tx_context(uint64_t xid, uint32_t node_id, uint32_t dsb_node_id,
     prepare_commit_log_synced_(false),
     commit_log_synced_(false),
     dl_(dl),
-    victim_(false) {
+    victim_(false),
+    log_rep_delay_(0) {
 #ifdef DB_TYPE_GEO_REP_OPTIMIZE
   if (is_geo_rep_optimized()) {
     dependency_committed_ = false;
@@ -53,6 +54,7 @@ tx_context::tx_context(uint64_t xid, uint32_t node_id, uint32_t dsb_node_id,
   BOOST_ASSERT(node_id != 0);
   BOOST_ASSERT(dsb_node_id != 0);
   start_ = boost::posix_time::microsec_clock::local_time();
+  part_time_tracer_.begin();
 }
 
 void tx_context::notify_lock_acquire(EC ec, const ptr<std::vector<ptr<tx_context>>> &in) {
@@ -95,6 +97,7 @@ void tx_context::async_read(
   ptr<lock_item> l(new lock_item(s->xid_, oid, lt, table_id, predicate(key)));
   s->locks_.insert(std::make_pair(oid, l));
   lock_acquire_ = [table_id, key, oid, s, fn_read_done](EC ec) {
+    s->lock_wait_time_tracer_.end();
     s->trace_state_ = RTS_LOCK_DONE;
     if (ec == EC::EC_OK) {
       std::pair<tuple_pb, bool> r = s->mgr_->get(table_id, key);
@@ -119,6 +122,7 @@ void tx_context::async_read(
   BOOST_ASSERT(mgr_);
   trace_state_ = RTS_WAIT_LOCK;
   trace_message_ += "lk;";
+  lock_wait_time_tracer_.begin();
   mgr_->lock_row(xid_, oid, lt, table_id, predicate(key), shared_from_this());
 }
 
@@ -132,6 +136,7 @@ void tx_context::async_update(uint32_t table_id, tuple_id_t key,
   s->locks_.insert(std::make_pair(oid, l));
   lock_acquire_ = [table_id, key, oid, s, fn_update_done,
       tuple](EC ec) {
+    s->lock_wait_time_tracer_.end();
     s->trace_state_ = RTS_LOCK_DONE;
     if (ec == EC::EC_OK) {
       std::pair<tuple_pb, bool> r = s->mgr_->get(table_id, key);
@@ -151,6 +156,7 @@ void tx_context::async_update(uint32_t table_id, tuple_id_t key,
   };
   trace_state_ = RTS_WAIT_LOCK;
   trace_message_ += "lk;";
+  lock_wait_time_tracer_.begin();
   mgr_->lock_row(xid_, oid, LOCK_WRITE_ROW, table_id, predicate(key), shared_from_this());
 }
 
@@ -164,6 +170,7 @@ void tx_context::async_insert(uint32_t table_id, tuple_id_t key,
   s->locks_.insert(std::make_pair(oid, l));
   lock_acquire_ = [table_id, key, oid, s, tuple,
       fn_write_done](EC ec) {
+    s->lock_wait_time_tracer_.end();
     s->trace_state_ = RTS_LOCK_DONE;
     if (ec == EC::EC_OK) {
       std::pair<tuple_pb, bool> r = s->mgr_->get(table_id, key);
@@ -190,6 +197,7 @@ void tx_context::async_insert(uint32_t table_id, tuple_id_t key,
   };
   trace_state_ = RTS_WAIT_LOCK;
   trace_message_ += "lk;";
+  lock_wait_time_tracer_.begin();
   mgr_->lock_row(xid_, oid, LOCK_WRITE_ROW, table_id, predicate(key), shared_from_this());
 }
 
@@ -201,6 +209,7 @@ void tx_context::async_remove(uint32_t table_id, tuple_id_t key,
   s->locks_.insert(std::make_pair(oid, l));
   BOOST_ASSERT(lock_acquire_ == nullptr);
   lock_acquire_ = [s, table_id, key, fn_removed](EC ec) {
+    s->lock_wait_time_tracer_.end();
     s->trace_state_ = RTS_LOCK_DONE;
     std::pair<tuple_pb, bool> r = s->mgr_->get(table_id, key);
     if (r.second) {
@@ -211,6 +220,7 @@ void tx_context::async_remove(uint32_t table_id, tuple_id_t key,
   };
   trace_state_ = RTS_WAIT_LOCK;
   trace_message_ += "lk;";
+  lock_wait_time_tracer_.begin();
   mgr_->lock_row(xid_, oid, LOCK_WRITE_ROW, table_id, predicate(key), shared_from_this());
 }
 
@@ -229,6 +239,7 @@ void tx_context::read_data_from_dsb(uint32_t table_id, tuple_id_t key,
   BOOST_ASSERT(fn_read_done);
   req.set_tuple_id(key);
   BOOST_ASSERT(dsb_node_id_ != 0);
+  read_time_tracer_.begin();
   result<void> r = service_->async_send(dsb_node_id_, C2D_READ_DATA_REQ, req);
   if (!r) {
     BOOST_LOG_TRIVIAL(error) << "node " << dsb_node_id_ << " async_send error " << r.error().message();
@@ -258,6 +269,7 @@ void tx_context::read_data_from_dsb_response(
   if (ec == EC::EC_OK && is_tuple_nil(data)) {
     mgr_->put(table_id, key, data);
   }
+  read_time_tracer_.end();
 }
 
 void tx_context::process_tx_request(const tx_request &req) {
@@ -406,8 +418,17 @@ void tx_context::send_tx_response() {
   if (fn_tx_state_) {
     fn_tx_state_(xid_, state_);
   }
+  part_time_tracer_.end();
+
   BOOST_ASSERT(cli_conn_);
   response_.set_error_code(uint32_t(error_code_));
+  //BOOST_LOG_TRIVIAL(info) << append_time_tracer_.duration().total_microseconds() << "us";
+  response_.set_latency_append(append_time_tracer_.duration().total_microseconds());
+  response_.set_latency_read(read_time_tracer_.duration().total_microseconds());
+  response_.set_latency_lock_wait(lock_wait_time_tracer_.duration().total_microseconds());
+  response_.set_latency_replicate(log_rep_delay_);
+  response_.set_latency_part(part_time_tracer_.duration().total_microseconds());
+  response_.set_access_part(1);
   result<void> r = cli_conn_->async_send(CLIENT_TX_RESP, response_);
   if (!r) {
     BOOST_LOG_TRIVIAL(trace) << "send client response error";
@@ -446,6 +467,7 @@ void tx_context::on_log_entry_commit(tx_cmd_type type) {
   log_entry_.clear();
   switch (type) {
   case TX_CMD_RM_COMMIT: {
+    append_time_tracer_.end();
     on_committed_log_commit();
     break;
   }
@@ -545,6 +567,7 @@ void tx_context::release_lock() {
 void tx_context::async_force_log() {
   trace_message_ += "fc lg;";
   trace_state_ = RTS_WAIT_FORCE_LOG;
+  append_time_tracer_.begin();
   wal_->async_append(log_entry_);
   log_entry_.clear();
 }
@@ -696,6 +719,7 @@ void tx_context::prepare_abort_tx() {
 }
 
 void tx_context::send_prepare_message(bool commit) {
+  part_time_tracer_.end();
   tx_rm_prepare msg;
   msg.set_xid(xid_);
   msg.set_source_node(node_id_);
@@ -703,6 +727,11 @@ void tx_context::send_prepare_message(bool commit) {
   msg.set_dest_node(coord_node_id_);
   msg.set_dest_rg(TO_RG_ID(coord_node_id_));
   msg.set_commit(commit);
+  msg.set_latency_append(append_time_tracer_.duration().total_microseconds());
+  msg.set_latency_read(read_time_tracer_.duration().total_microseconds());
+  msg.set_latency_lock_wait(lock_wait_time_tracer_.duration().total_microseconds());
+  msg.set_latency_replicate(log_rep_delay_);
+  msg.set_latency_part(part_time_tracer_.duration().total_microseconds());
   result<void> r = service_->async_send(coord_node_id_, TX_RM_PREPARE, msg);
   if (!r) {
     BOOST_LOG_TRIVIAL(error) << "async send Prepare error";
@@ -923,4 +952,8 @@ void tx_context::debug_tx(std::ostream &os) {
 
 }
 
+
+void tx_context::log_rep_delay(uint64_t us) {
+  log_rep_delay_ = us;
+}
 #endif // #ifdef DB_TYPE_NON_DETERMINISTIC

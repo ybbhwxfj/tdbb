@@ -586,6 +586,7 @@ void cc_block::handle_append_log_response(
     if (fn_schedule_after_ != nullptr) {
       fn_schedule_after_(tx_op(t, xid, xl.operations().size() + 1));
     }
+    uint64_t repl_latency = xl.repl_latency();
     switch (t) {
 #ifdef DB_TYPE_SHARE_NOTHING
     case TX_CMD_TM_ABORT:
@@ -608,6 +609,7 @@ void cc_block::handle_append_log_response(
     case TX_CMD_RM_BEGIN: {
       std::pair<ptr<tx_context>, bool> p = tx_context_.find(xid);
       if (p.second) {
+        p.first->log_rep_delay(repl_latency);
         p.first->on_log_entry_commit(t);
       } else {
         BOOST_LOG_TRIVIAL(error) << "cannot find long1 :" << xid;
@@ -803,7 +805,7 @@ void cc_block::handle_tx_rm_enable_violate(const tx_enable_violate &msg) {
 void cc_block::abort_tx(xid_t xid, EC ec) {
   std::pair<ptr<tx_context>, bool> r = tx_context_.find(xid);
   if (r.second) {
-    BOOST_LOG_TRIVIAL(info) << "victim tx" << xid;
+    BOOST_LOG_TRIVIAL(info) << "victim tx " << xid;
     r.first->abort(ec);
   }
 #ifdef DB_TYPE_SHARE_NOTHING

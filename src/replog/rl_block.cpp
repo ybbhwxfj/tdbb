@@ -245,21 +245,23 @@ void rl_block::response_commit_log(EC ec, const std::vector<ptr<log_entry>> &log
   msg.set_error_code(ec);
   msg.set_dest(ccb_node_id_);
   msg.set_source(node_id_);
-
+  boost::posix_time::ptime now = boost::posix_time::microsec_clock::local_time();
+  uint64_t us = (now - start_).total_microseconds();
   for (const ptr<log_entry> &log: logs) {
     for (const tx_log &xlog: log->xlog()) {
       tx_log *x = msg.add_logs();
       x->set_xid(xlog.xid());
       x->set_log_type(xlog.log_type());
+      x->set_repl_latency(us - xlog.repl_latency());
     }
   }
 
   uint32_t ms = conf_.get_test_config().wan_latency_ms();
-  if (ms > 0) {
+  if (ms > 0) { // only valid when debug ..
     ptr<boost::asio::steady_timer> timer(
         new boost::asio::steady_timer(
             service_->get_service(SERVICE_RAFT),
-            boost::asio::chrono::milliseconds(500)));
+            boost::asio::chrono::milliseconds(ms)));
     timer->async_wait([msg, timer, this](const boost::system::error_code &error) {
       timer.get();
       if (not error.failed()) {

@@ -25,5 +25,6 @@ message tx_log {
   uint64 xid = 2;
   uint64 index = 3;
   uint64 term = 4;
-  repeated tx_operation operations = 5;
+  uint64 repl_latency = 5;
+  repeated tx_operation operations = 6;
 }
