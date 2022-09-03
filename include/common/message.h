@@ -53,6 +53,7 @@ enum message_type {
   CLIENT_TX_REQ,
   TX_TM_COMMIT,
   TX_TM_ABORT,
+  TX_TM_END,
   TX_RM_PREPARE,
   TX_RM_ACK,
   TX_TM_REQUEST,

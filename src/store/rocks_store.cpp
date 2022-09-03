@@ -70,38 +70,38 @@ void rocks_store::close() {
 
 result<void> rocks_store::replay(const replay_to_dsb_request msg) {
   rocksdb::WriteBatch batch;
-  for (const tx_log &log: msg.logs()) {
-    for (const tx_operation &op: log.operations()) {
+  for (const tx_log &log : msg.logs()) {
+    for (const tx_operation &op : log.operations()) {
       switch (op.op_type()) {
-      case tx_op_type::TX_OP_DELETE: {
-        table_id_t table_id = op.tuple_row().table_id();
-        tuple_id_t key = op.tuple_row().tuple_id();
-        key128 k(table_id, key);
-        rocksdb::Status s = batch.Delete(rocksdb::Slice(k));
-        if (!s.ok()) {
-          // TODO ...
+        case tx_op_type::TX_OP_DELETE: {
+          table_id_t table_id = op.tuple_row().table_id();
+          tuple_id_t key = op.tuple_row().tuple_id();
+          key128 k(table_id, key);
+          rocksdb::Status s = batch.Delete(rocksdb::Slice(k));
+          if (!s.ok()) {
+            // TODO ...
+          }
         }
-      }
-        break;
-      case tx_op_type::TX_OP_INSERT:
-      case tx_op_type::TX_OP_UPDATE: {
-        table_id_t table_id = op.tuple_row().table_id();
-        tuple_id_t key = op.tuple_row().tuple_id();
-        if (table_id >= MAX_TABLES) {
-          // TODO ...
-        }
+          break;
+        case tx_op_type::TX_OP_INSERT:
+        case tx_op_type::TX_OP_UPDATE: {
+          table_id_t table_id = op.tuple_row().table_id();
+          tuple_id_t key = op.tuple_row().tuple_id();
+          if (table_id >= MAX_TABLES) {
+            // TODO ...
+          }
 
-        //bool overwrite = op.op_type() == TX_OP_UPDATE;
+          //bool overwrite = op.op_type() == TX_OP_UPDATE;
 
-        key128 k(table_id, key);
-        rocksdb::Status s = batch.Put(rocksdb::Slice(k),
-                                      rocksdb::Slice(pbtuple_to_binary(op.tuple_row().tuple())));
-        if (!s.ok()) {
-          // TODO ...
+          key128 k(table_id, key);
+          rocksdb::Status s = batch.Put(rocksdb::Slice(k),
+                                        rocksdb::Slice(pbtuple_to_binary(op.tuple_row().tuple())));
+          if (!s.ok()) {
+            // TODO ...
+          }
         }
-      }
-        break;
-      default:break;
+          break;
+        default:break;
       }
     }
   }
@@ -118,8 +118,10 @@ result<void> rocks_store::replay(const replay_to_dsb_request msg) {
     return outcome::success();
   }
 }
-result<void> rocks_store::put(table_id_t table_id, tuple_id_t key,
-                              const tuple_pb &tuple) {
+result<void> rocks_store::put(
+    table_id_t table_id,
+    tuple_id_t key,
+    tuple_pb &&tuple) {
   if (table_id >= MAX_TABLES) {
     return outcome::failure(EC::EC_UNKNOWN_TABLE_ID);
   }

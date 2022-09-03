@@ -14,3 +14,5 @@ add_library(
         test_config.cpp
 )
 
+add_dependencies(common proto)
+

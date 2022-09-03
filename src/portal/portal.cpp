@@ -1,4 +1,5 @@
 #include "portal/portal.h"
+#include "common/define.h"
 #include "common/block_exception.h"
 #include "common/config.h"
 #include "concurrency/cc_block.h"
@@ -13,8 +14,11 @@
 #include <boost/program_options.hpp>
 #include <iostream>
 #include <utility>
-
+#include <boost/regex.hpp>
+#include "common/debug_url.h"
 void block_run(const config &conf, const callback &fn);
+
+bool print_message = false;
 
 int portal(int argc, const char *argv[]) {
   boost::program_options::options_description desc("Allowed options");
@@ -28,7 +32,8 @@ int portal(int argc, const char *argv[]) {
         boost::program_options::parse_command_line(argc, argv, desc), vm);
     boost::program_options::notify(vm);
   } catch (std::exception &ex) {
-    return 1;
+    BOOST_LOG_TRIVIAL(error) << "exception: " << ex.what();
+    exit(-1);
   }
 
   std::string conf_path;
@@ -72,9 +77,9 @@ int portal(int argc, const char *argv[]) {
 void block_run(const config &conf, const callback &fn) {
   std::string n = block_type_list_2_string(conf.this_node_config().block_type_list());
   std::string name =
-      "br_" + n + std::to_string(conf.rg_id()) + std::to_string(conf.az_id());
+      "BE_" + n + std::to_string(conf.rg_id()) + std::to_string(conf.az_id());
   set_thread_name(name);
-  set_thread_name(name);
+
   BOOST_ASSERT(!conf.node_name().empty());
   BOOST_ASSERT(conf.this_node_config().port() != 0);
 
@@ -83,13 +88,13 @@ void block_run(const config &conf, const callback &fn) {
 
   ptr<net_service> service = std::make_shared<net_service>(conf);
   ptr<sock_server> server =
-      std::make_shared<sock_server>(conf, service.get());
+      std::make_shared<sock_server>(conf, service);
 
   std::vector<ptr<processor>> processors;
   processors.resize(MESSAGE_BLOCK_END);
   std::vector<ptr<block>> blocks;
 
-  for (const block_type_t &t: conf.this_node_config().block_type_list()) {
+  for (const block_type_t &t : conf.this_node_config().block_type_list()) {
     if (t == BLOCK_CCB) {
 
       ptr<cc_block> ccb = std::make_shared<cc_block>(
@@ -108,7 +113,7 @@ void block_run(const config &conf, const callback &fn) {
       processors[s_dsb->message_block_type()] = s_dsb;
       blocks.push_back(dsb);
     } else if (t == BLOCK_RLB) {
-      ptr<rl_block> rlb = std::make_shared<rl_block>(conf, service.get(),
+      ptr<rl_block> rlb = std::make_shared<rl_block>(conf, service,
                                                      fn.become_leader_,
                                                      fn.become_follower_,
                                                      fn.commit_entries_
@@ -125,19 +130,29 @@ void block_run(const config &conf, const callback &fn) {
     }
   }
 
-  for (const auto &b: blocks) {
+  for (const auto &b : blocks) {
     service->register_block(b.get());
   }
   BOOST_ASSERT(!blocks.empty());
   auto srv_ptr = server.get();
 
+  //struct count_msg {
+  //  std::mutex mtx_;
+  //  boost::posix_time::ptime start_ts_;
+  //  std::unordered_map<message_type, uint32_t> map_;
+  //};
+  //ptr<count_msg> cm(new count_msg());
+  //cm->start_ts_ = std::chrone::stead_lock::now();
   processor_sink<> s;
   message_handler handler = [s, processors, srv_ptr,
       &conf](ptr<connection> conn, message_type id,
-             byte_buffer &buffer) -> result<void> {
+             byte_buffer &buffer, msg_hdr *hdr) -> result<void> {
 
     try {
-      boost::posix_time::ptime b = boost::posix_time::microsec_clock::local_time();
+#ifdef TEST_NETWORK_TIME
+      auto b = std::chrono::steady_clock::now();
+#endif //TEST_NETWORK_TIME
+
       message_block bt = s.get_message_block_type(id);
       auto p = processors[bt];
       if (id == CLOSE_REQ) {
@@ -145,30 +160,72 @@ void block_run(const config &conf, const callback &fn) {
         BOOST_LOG_TRIVIAL(info) << id_2_name(conf.node_id()) << " receive close";
       } else {
         if (p) {
-          auto r = p->process(std::move(conn), id, buffer);
+          auto r = p->process(std::move(conn), id, buffer, hdr);
           if (not r) {
             return r;
           }
         }
       }
-
-      boost::posix_time::ptime e = boost::posix_time::microsec_clock::local_time();
-      uint64_t ms = (e - b).total_milliseconds();
-      if (ms > 500) {
+#ifdef TEST_NETWORK_TIME
+      auto e = std::chrono::steady_clock::now();
+      uint64_t ms = to_milliseconds(e - b);
+      if (ms > 50) {
         BOOST_LOG_TRIVIAL(info) << " process message " << ms << "ms, " << enum2holder(id);
       }
+      if (print_message) {
+        //BOOST_LOG_TRIVIAL(info) << " process message " << enum2holder(id);
+      }
+#endif // #ifdef TEST_NETWORK_TIME
       return outcome::success();
     } catch (block_exception &ex) {
       return outcome::failure(ex.error_code());
     }
   };
+
+  proto_message_handler local_handler = [s, processors, srv_ptr,
+      &conf](ptr<connection> conn, message_type id, ptr<google::protobuf::Message> msg) -> result<void> {
+
+    try {
+#ifdef TEST_NETWORK_TIME
+      auto b = std::chrono::steady_clock::now();
+#endif //TEST_NETWORK_TIME
+      message_block bt = s.get_message_block_type(id);
+      auto p = processors[bt];
+      if (id == CLOSE_REQ) {
+        srv_ptr->stop();
+        BOOST_LOG_TRIVIAL(info) << id_2_name(conf.node_id()) << " receive close";
+      } else {
+        if (p) {
+          auto r = p->process_msg(std::move(conn), id, msg);
+          if (not r) {
+            return r;
+          }
+        }
+      }
+#ifdef TEST_NETWORK_TIME
+      auto e = std::chrono::steady_clock::now();
+      uint64_t ms = to_milliseconds(e - b);
+      if (ms > 50) {
+        BOOST_LOG_TRIVIAL(info) << " process message " << ms << "ms, " << enum2holder(id);
+      }
+      if (print_message) {
+        //BOOST_LOG_TRIVIAL(info) << " process message " << enum2holder(id);
+      }
+#endif // #ifdef TEST_NETWORK_TIME
+      return outcome::success();
+    } catch (block_exception &ex) {
+      return outcome::failure(ex.error_code());
+    }
+  };
+
+  service->register_local_handler(local_handler);
   // message processing handler
   service->register_handler(handler);
 
   http_handler debug_handler = [blocks](const std::string &path,
                                         std::ostream &os
   ) {
-    for (const auto &b: blocks) {
+    for (const auto &b : blocks) {
       b->handle_debug(path, os);
     }
   };
@@ -184,7 +241,7 @@ void block_run(const config &conf, const callback &fn) {
   debug->start();
 
   // this invoke would be blocked when normal processing,
-  // when the server stopped, it wait all thread stop
+  // when the server stopped, it wait all thread cancel_and_join
   server->join();
   BOOST_LOG_TRIVIAL(info) << "block-db " << id_2_name(conf.node_id()) << " stopped ";
   debug->stop();

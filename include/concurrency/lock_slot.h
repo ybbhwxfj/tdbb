@@ -1,4 +1,5 @@
 #pragma once
+
 #include "common/db_type.h"
 #include "common/tuple.h"
 #include "common/tx_wait.h"
@@ -7,6 +8,7 @@
 #include "common/ptr.hpp"
 #include "common/enum_str.h"
 #include "concurrency/tx.h"
+#include "concurrency/violate.h"
 #include "common/lock_mode.h"
 #include "common/callback.h"
 #include <map>
@@ -19,7 +21,7 @@
 class tx_context;
 
 class lock_slot : public std::enable_shared_from_this<lock_slot> {
-private:
+ private:
   lock_mgr_trait *mgr_;
   table_id_t table_id_;
   tuple_id_t tuple_id_;
@@ -36,7 +38,7 @@ private:
   // must be recursive
   // notify_acquire could call lock in the same thread
   std::recursive_mutex mutex_;
-public:
+ public:
   lock_slot(
       lock_mgr_trait *mgr,
       table_id_t table_id,
@@ -46,11 +48,17 @@ public:
   );
 
   ~lock_slot();
-  bool lock(lock_mode type, const ptr<tx> &, oid_t oid);
+
+  bool lock(lock_mode type, const ptr<tx_rm> &, oid_t oid);
+
   void unlock(xid_t);
-  void make_violable(lock_mode type, xid_t);
+
+  void make_violable(lock_mode type, xid_t, violate &v);
+
   void debug_lock(std::ostream &os);
+
   void build_dependency(tx_wait_set &ds);
+
   void assert_check();
 
   std::shared_ptr<lock_slot> get_ptr() {
@@ -62,28 +70,49 @@ public:
     return info_.empty();
   }
 
-  bool predicate_conflict(xid_t xid, oid_t oid, ptr<tx> txn);
-private:
+  tuple_id_t tuple_id() const {
+    return tuple_id_;
+  }
+
+  bool predicate_conflict(xid_t xid, oid_t oid, ptr<tx_rm> txn);
+
+ private:
   // make xid's locks are violable...
+  void tx_build_dependency(xid_t xid, tx_wait_set &ds);
 
   void make_read(xid_t xid);
-  bool read_lock(const ptr<tx> &ctx, oid_t oid, lock_mode mode);
-  bool write_lock(const ptr<tx> &ctx, oid_t oid);
-  std::pair<bool, bool> acquire_read_lock(const ptr<tx> &ctx, oid_t oid, lock_mode mode);
+
+  bool read_lock(const ptr<tx_rm> &ctx, oid_t oid, lock_mode mode);
+
+  bool write_lock(const ptr<tx_rm> &ctx, oid_t oid);
+
+  std::pair<bool, bool> acquire_read_lock(const ptr<tx_rm> &ctx, oid_t oid, lock_mode mode);
+
   void unlock_gut(xid_t xid);
-  void make_violable(xid_t xid);
+
+  void make_violable(xid_t xid, violate &v);
 
   bool remove_lock(xid_t xid);
-  bool add_wait(const ptr<tx> &ctx, oid_t oid, lock_mode type);
-  bool add_read(const ptr<tx> &ctx, oid_t oid, lock_mode mode);
-  bool add_write(const ptr<tx> &ctx, oid_t oid);
+
+  bool add_wait(const ptr<tx_rm> &ctx, oid_t oid, lock_mode type);
+
+  bool add_read(const ptr<tx_rm> &ctx, oid_t oid, lock_mode mode);
+
+  bool add_write(const ptr<tx_rm> &ctx, oid_t oid);
+
   void notify_lock_acquire();
 
-  void async_add_dependency(const ptr<tx> &ctx);
-  result<void> wait_timeout(xid_t xid, tx_wait_set &ws);
+  void async_add_dependency(const ptr<tx_rm> &ctx);
+
+  result<void> tx_wait_for(xid_t xid, tx_wait_set &ws);
+
 #ifdef DB_TYPE_GEO_REP_OPTIMIZE
+
   void dependency_write_read(std::vector<ptr<tx_context>> &in);
-  static void dlv_acquire(EC ec, const ptr<tx> &ctx, oid_t oid, const ptr<std::vector<ptr<tx_context>>> &in);
+
+  static void dlv_acquire(EC ec, const ptr<tx_rm> &ctx, oid_t oid, const ptr<std::vector<ptr<tx_context>>> &in);
+
 #endif
-  void on_lock_acquired(EC ec, lock_mode mode, ptr<tx> txn, oid_t oid);
+
+  void on_lock_acquired(EC ec, lock_mode mode, ptr<tx_rm> txn, oid_t oid);
 };

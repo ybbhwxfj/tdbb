@@ -4,7 +4,7 @@
 
 data_mgr::~data_mgr() = default;
 
-void data_mgr::put(tuple_id_t key, const tuple_pb &tuple) {
+void data_mgr::put(tuple_id_t key, tuple_pb &&tuple) {
   ptr<tuple_list> list;
   key_row_locks_.find_or_insert(
       key,
@@ -14,7 +14,7 @@ void data_mgr::put(tuple_id_t key, const tuple_pb &tuple) {
       [&key, &list]() {
         ptr<tuple_list> s = std::make_shared<tuple_list>();
         list = s;
-        return std::make_pair(key, s);
+        return s;
       });
   if (list) {
     std::scoped_lock l(list->mutex_);
@@ -33,4 +33,13 @@ std::pair<tuple_pb, bool> data_mgr::get(tuple_id_t key) {
     }
   }
   return std::make_pair(tuple_pb(), false);
+}
+
+void data_mgr::print() {
+  key_row_locks_.traverse(
+      [](tuple_id_t key, ptr<tuple_list> v) {
+        if (v) {
+          BOOST_LOG_TRIVIAL(info) << "    key:" << key << ", versions: " << v->versions_.size();
+        }
+      });
 }

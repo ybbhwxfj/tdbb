@@ -1,5 +1,5 @@
 #include "concurrency/tx_coordinator.h"
-
+#include "common/define.h"
 #include <utility>
 
 #ifdef DB_TYPE_NON_DETERMINISTIC
@@ -22,51 +22,60 @@ enum_strings<tm_trace_state>::e2s_t enum_strings<tm_trace_state>::enum2str = {
 };
 
 tx_coordinator::tx_coordinator(
+    boost::asio::io_context::strand s,
     uint64_t xid, uint32_t node_id,
     std::unordered_map<shard_id_t, node_id_t> lead_node,
     net_service *service, ptr<connection> connection, write_ahead_log *write_ahead_log, fn_tm_state fn)
-    : xid_(xid), node_id_(node_id), lead_node_(std::move(lead_node)), service_(service),
+    : tx_base(s, xid),
+      xid_(xid), node_id_(node_id), lead_node_(std::move(lead_node)), service_(service),
       connection_(std::move(connection)), wal_(write_ahead_log), tm_state_(TM_IDLE),
       write_commit_log_(false), write_abort_log_(false), error_code_(EC::EC_OK), victim_(false),
       responsed_(false),
       fn_tm_state_(std::move(fn)),
       latency_read_(0),
+      latency_read_dsb_(0),
       latency_replicate_(0),
       latency_append_(0),
       latency_lock_wait_(0),
-      latency_part_(0) {
-  start_ = boost::posix_time::microsec_clock::local_time();
+      latency_part_(0),
+      num_lock_(0),
+      num_read_violate_(0),
+      num_write_violate_(0) {
+  start_ = std::chrono::steady_clock::now();
 }
 
 void tx_coordinator::on_log_entry_commit(tx_cmd_type type) {
+  std::scoped_lock l(mutex_);
   switch (type) {
-  case TX_CMD_TM_COMMIT: {
-    on_committed();
-    break;
-  }
-  case TX_CMD_TM_ABORT: {
-    on_aborted();
-    break;
-  }
-  case TX_CMD_TM_END: {
-    on_ended();
-    break;
-  }
-  default:break;
+    case TX_CMD_TM_COMMIT: {
+      on_committed();
+      break;
+    }
+    case TX_CMD_TM_ABORT: {
+      on_aborted();
+      break;
+    }
+    case TX_CMD_TM_END: {
+      on_ended();
+      break;
+    }
+    default:break;
   }
 }
 
 void tx_coordinator::on_committed() {
-
+#ifdef TX_TRACE
   trace_message_ += "C;";
+#endif
   tm_state_ = TM_COMMITTED;
   send_commit();
   send_tx_response();
 }
 
 void tx_coordinator::on_aborted() {
-
+#ifdef TX_TRACE
   trace_message_ += "A;";
+#endif
   tm_state_ = TM_ABORTED; // TODO ... ec abort
   error_code_ = EC::EC_TX_ABORT;
   send_abort();
@@ -75,8 +84,9 @@ void tx_coordinator::on_aborted() {
 
 void tx_coordinator::on_ended() {
   std::scoped_lock l(mutex_);
-
+#ifdef TX_TRACE
   trace_message_ += "E;";
+#endif
   tm_state_ = TM_DONE;
   if (fn_tm_state_) {
     fn_tm_state_(xid_, tm_state_);
@@ -84,9 +94,9 @@ void tx_coordinator::on_ended() {
 }
 
 result<void> tx_coordinator::handle_tx_request(const tx_request &req) {
-  std::scoped_lock l(mutex_);
-
+#ifdef TX_TRACE
   trace_message_ += "tx req;";
+#endif
   BOOST_ASSERT(req.distributed());
   for (auto iter = req.operations().begin(); iter != req.operations().end();
        ++iter) {
@@ -110,11 +120,11 @@ result<void> tx_coordinator::handle_tx_request(const tx_request &req) {
     }
   }
 
-  for (auto &iter: rm_tracer_) {
+  for (auto &iter : rm_tracer_) {
     iter.second.message_.set_xid(xid_);
     iter.second.message_.set_client_request(false);
-    auto r = service_->async_send(iter.second.lead_, TX_TM_REQUEST,
-                                  iter.second.message_);
+    auto m = std::make_shared<tx_request>(iter.second.message_);
+    auto r = service_->async_send(iter.second.lead_, TX_TM_REQUEST, m);
     if (not r) {
       return r;
     }
@@ -123,17 +133,22 @@ result<void> tx_coordinator::handle_tx_request(const tx_request &req) {
 }
 
 void tx_coordinator::send_commit() {
-  for (const auto &iter: rm_tracer_) {
+  for (const auto &iter : rm_tracer_) {
     node_id_t lead = iter.second.lead_;
-    tx_tm_commit msg;
-    msg.set_xid(xid_);
-    msg.set_source_node(node_id_);
-    msg.set_source_rg(TO_RG_ID(node_id_));
-    msg.set_dest_node(lead);
-    msg.set_dest_rg(TO_RG_ID(lead));
+    auto msg = std::make_shared<tx_tm_commit>();
+
+    msg->set_xid(xid_);
+    msg->set_source_node(node_id_);
+    msg->set_source_rg(TO_RG_ID(node_id_));
+    msg->set_dest_node(lead);
+    msg->set_dest_rg(TO_RG_ID(lead));
+#ifdef TX_TRACE
+    trace_message_ += id_2_name(msg->dest_node()) + " SA;";
+#endif
     result<void> r =
         service_->async_send(lead, message_type::TX_TM_COMMIT, msg);
     if (not r) {
+      BOOST_LOG_TRIVIAL(error) << "async send tx_rm commit error";
     }
   }
   if (connection_ != nullptr) {
@@ -141,14 +156,14 @@ void tx_coordinator::send_commit() {
   }
 }
 void tx_coordinator::send_abort() {
-  for (const auto &iter: rm_tracer_) {
+  for (const auto &iter : rm_tracer_) {
     node_id_t lead = iter.second.lead_;
-    tx_tm_abort msg;
-    msg.set_xid(xid_);
-    msg.set_source_node(node_id_);
-    msg.set_source_rg(TO_RG_ID(node_id_));
-    msg.set_dest_node(lead);
-    msg.set_dest_rg(TO_RG_ID(lead));
+    auto msg = std::make_shared<tx_tm_abort>();
+    msg->set_xid(xid_);
+    msg->set_source_node(node_id_);
+    msg->set_source_rg(TO_RG_ID(node_id_));
+    msg->set_dest_node(lead);
+    msg->set_dest_rg(TO_RG_ID(lead));
 
     result<void> r = service_->async_send(lead, message_type::TX_TM_ABORT, msg);
     if (not r) {
@@ -157,9 +172,25 @@ void tx_coordinator::send_abort() {
   }
 }
 
+void tx_coordinator::send_end() {
+  for (const auto &iter : rm_tracer_) {
+    node_id_t lead = iter.second.lead_;
+    auto msg = std::make_shared<tx_tm_end>();
+    msg->set_xid(xid_);
+    msg->set_source_node(node_id_);
+    msg->set_dest_node(lead);
+
+    result<void> r = service_->async_send(lead, message_type::TX_TM_END, msg);
+    if (not r) {
+
+    }
+  }
+}
+
 void tx_coordinator::handle_tx_rm_prepare(const tx_rm_prepare &msg) {
-  std::scoped_lock l(mutex_);
+#ifdef TX_TRACE
   trace_message_ += id_2_name(msg.source_node()) + " P" + (msg.commit() ? "C;" : "A;");
+#endif
   auto iter = rm_tracer_.find(msg.source_rg());
   if (iter == rm_tracer_.end()) {
     BOOST_ASSERT(false);
@@ -167,11 +198,17 @@ void tx_coordinator::handle_tx_rm_prepare(const tx_rm_prepare &msg) {
   }
   if (iter->second.rm_state_ == RM_IDLE) {
     iter->second.rm_state_ = msg.commit() ? RM_PREPARE_COMMIT : RM_PREPARE_ABORT;
-    latency_read_ += msg.latency_read();
-    latency_replicate_ += msg.latency_replicate();
-    latency_append_ += msg.latency_append();
-    latency_lock_wait_ += msg.latency_lock_wait();
-    latency_part_ += msg.latency_part();
+    if (msg.commit()) {
+      latency_read_ += msg.latency_read();
+      latency_read_dsb_ += msg.latency_read_dsb();
+      latency_replicate_ += msg.latency_replicate();
+      latency_append_ += msg.latency_append();
+      latency_lock_wait_ += msg.latency_lock_wait();
+      latency_part_ += msg.latency_part();
+      num_lock_ += msg.num_lock();
+      num_read_violate_ += msg.num_read_violate();
+      num_write_violate_ += msg.num_write_violate();
+    }
     step_tm_state_advance();
   } else {
     if (not victim_) {
@@ -182,8 +219,9 @@ void tx_coordinator::handle_tx_rm_prepare(const tx_rm_prepare &msg) {
 }
 
 void tx_coordinator::handle_tx_rm_ack(const tx_rm_ack &msg) {
-  std::scoped_lock l(mutex_);
-
+#ifdef TX_TRACE
+  trace_message_ += id_2_name(msg.source_node()) + " A" + (msg.commit() ? "C;" : "A;");
+#endif
   auto iter = rm_tracer_.find(msg.source_rg());
   if (iter == rm_tracer_.end()) {
     BOOST_ASSERT(false);
@@ -222,25 +260,27 @@ void tx_coordinator::step_tm_state_advance() {
   uint32_t committed = 0;
   uint32_t idle = 0;
   uint32_t total = 0;
-
+#ifdef TX_TRACE
   trace_message_ += "adv;";
-  for (const auto &i: rm_tracer_) {
+#endif
+  for (const auto &i : rm_tracer_) {
     total++;
     switch (i.second.rm_state_) {
-    case RM_PREPARE_COMMIT:prepare_commit++;
-      break;
-    case RM_PREPARE_ABORT:prepare_abort++;
-      break;
-    case RM_COMMITTED:committed++;
-      break;
-    case RM_ABORTED:aborted++;
-      break;
-    case RM_IDLE:idle++;
-      break;
+      case RM_PREPARE_COMMIT:prepare_commit++;
+        break;
+      case RM_PREPARE_ABORT:prepare_abort++;
+        break;
+      case RM_COMMITTED:committed++;
+        break;
+      case RM_ABORTED:aborted++;
+        break;
+      case RM_IDLE:idle++;
+        break;
     }
   }
   if (idle == 0) {
     if (committed == total || aborted == total) {
+      send_end();
       write_end_log();
     } else if (prepare_commit + prepare_abort == total) {
       if (prepare_abort == 0) {
@@ -254,26 +294,28 @@ void tx_coordinator::step_tm_state_advance() {
 
 void tx_coordinator::write_commit_log() {
   // append prepare commit log
-  if (tm_state_ == TM_IDLE && !write_commit_log_) {
+  if (tm_state_ == TM_IDLE && not victim_ && !write_commit_log_) {
     tx_log log;
     log.set_log_type(TX_CMD_TM_COMMIT);
     log.set_xid(xid_);
 
     auto s = shared_from_this();
-
+#ifdef TX_TRACE
     trace_message_ += "C log;";
+#endif
     wal_->async_append(log);
     write_commit_log_ = true;
   }
 }
 void tx_coordinator::write_abort_log() {
-  if (tm_state_ == TM_IDLE && !write_abort_log_) {
+  if (tm_state_ == TM_IDLE && !write_abort_log_ && !write_commit_log_) {
     tx_log log;
     log.set_log_type(TX_CMD_TM_ABORT);
     log.set_xid(xid_);
     auto s = shared_from_this();
-
+#ifdef TX_TRACE
     trace_message_ += "A log;";
+#endif
     wal_->async_append(log);
     write_abort_log_ = true;
   }
@@ -285,8 +327,9 @@ void tx_coordinator::write_end_log() {
     tx_log log;
     log.set_log_type(TX_CMD_TM_END);
     log.set_xid(xid_);
+#ifdef TX_TRACE
     trace_message_ += "E log;";
-
+#endif
     wal_->async_append(log);
     write_end_done_ = true;
   }
@@ -298,72 +341,83 @@ void tx_coordinator::send_tx_response() {
   }
 
   responsed_ = true;
-  response_.set_error_code(uint32_t(error_code_));
-  response_.set_latency_part(latency_part_);
-  response_.set_latency_read(latency_read_);
-  response_.set_latency_replicate(latency_replicate_);
-  response_.set_latency_append(latency_append_);
-  response_.set_latency_lock_wait(latency_lock_wait_);
-  response_.set_access_part(rm_tracer_.size());
-  result<void> r = connection_->async_send(CLIENT_TX_RESP, response_);
-  if (!r) {
-    BOOST_LOG_TRIVIAL(info) << "send client response error";
-  }
+  auto response = std::make_shared<tx_response>();
+  response->set_error_code(uint32_t(error_code_));
+  response->set_latency_part(latency_part_);
+  response->set_latency_read(latency_read_);
+  response->set_latency_read_dsb(latency_read_dsb_);
+  response->set_latency_replicate(latency_replicate_);
+  response->set_latency_append(latency_append_);
+  response->set_latency_lock_wait(latency_lock_wait_);
+  response->set_access_part(rm_tracer_.size());
+  response->set_num_lock(num_lock_);
+  response->set_num_read_violate(num_read_violate_);
+  response->set_num_write_violate(num_write_violate_);
+
+  service_->conn_async_send(connection_, CLIENT_TX_RESP, response);
 }
 
 void tx_coordinator::abort(EC ec) {
   std::scoped_lock l(mutex_);
   if (ec == EC_DEADLOCK) {
-    victim_ = true;
-    trace_message_ += "victim;";
+    if (tm_state_ == TM_IDLE && not victim_) {
+      victim_ = true;
+#ifdef TX_TRACE
+      trace_message_ += "victim;";
+#endif
+    }
+  }
+  if (write_commit_log_) {
+    return;
   }
   switch (tm_state_) {
-  case TM_IDLE: {
-    error_code_ = ec;
-    tm_state_ = TM_ABORTED;
-    send_tx_response();
-    send_abort();
-    return;
-  }
-  case TM_ABORTED: {
-    error_code_ = ec;
-    send_tx_response();
-    send_abort();
-    return;
-  }
-  default: {
-    return;
-  }
+    case TM_IDLE: {
+      error_code_ = ec;
+      tm_state_ = TM_ABORTED;
+      send_tx_response();
+      send_abort();
+      return;
+    }
+    case TM_ABORTED: {
+      error_code_ = ec;
+      send_tx_response();
+      send_abort();
+      return;
+    }
+    default: {
+      return;
+    }
   }
 }
 
 void tx_coordinator::timeout_clean_up() {
-  boost::posix_time::ptime now = boost::posix_time::microsec_clock::local_time();
-  if ((now - start_).total_microseconds() < 1000) {
+  auto now = std::chrono::steady_clock::now();
+  std::chrono::duration<double_t> duration = (now - start_);
+  if (duration.count() < 1) {
     return;
   }
   std::scoped_lock l(mutex_);
   switch (tm_state_) {
-  case TM_IDLE: {
-    tm_state_ = TM_ABORTED;
-    send_tx_response();
-    send_abort();
-    return;
-  }
-  case TM_COMMITTED: {
-    send_tx_response();
-    send_commit();
-    return;
-  }
-  case TM_ABORTED: {
-    send_tx_response();
-    send_abort();
-    return;
-  }
-  case TM_DONE: {
-    send_tx_response();
-    return;
-  }
+    case TM_IDLE: {
+      tm_state_ = TM_ABORTED;
+      send_tx_response();
+      send_abort();
+      return;
+    }
+    case TM_COMMITTED: {
+      send_tx_response();
+      send_commit();
+      return;
+    }
+    case TM_ABORTED: {
+      send_tx_response();
+      send_abort();
+      return;
+    }
+    case TM_DONE: {
+      send_tx_response();
+      return;
+    }
   }
 }
 #ifdef DB_TYPE_GEO_REP_OPTIMIZE
@@ -378,23 +432,27 @@ void tx_coordinator::handle_tx_enable_violate(const tx_enable_violate &msg) {
 }
 
 void tx_coordinator::send_tx_enable_violate() {
-  for (const auto &iter: rm_tracer_) {
+  for (const auto &iter : rm_tracer_) {
     if (not iter.second.violate_) {
       return;
     }
   }
-  for (const auto &iter: rm_tracer_) {
-    tx_enable_violate msg;
-    msg.set_xid(xid_);
-    msg.set_source(node_id_);
-    msg.set_dest(iter.second.lead_);
+  for (const auto &iter : rm_tracer_) {
+    auto msg = std::make_shared<tx_enable_violate>();
+    msg->set_xid(xid_);
+    msg->set_source(node_id_);
+    msg->set_dest(iter.second.lead_);
     auto r = service_->async_send(iter.second.lead_, TM_ENABLE_VIOLATE, msg);
     if (not r) {
-      BOOST_LOG_TRIVIAL(error) << " send TM tx enable violate error";
+      BOOST_LOG_TRIVIAL(error) << " send TM tx_rm enable violate error";
     }
   }
 }
 #endif // DB_TYPE_GEO_REP_OPTIMIZE
 
+void tx_coordinator::debug_tx(std::ostream &os) {
+  os << id_2_name(node_id_) << " TM : " << xid_ << " state: " << enum2str(tm_state_) << " trace: " << trace_message_
+     << std::endl;
+}
 #endif // DB_TYPE_SHARE_NOTHING
 #endif // #ifdef DB_TYPE_NON_DETERMINISTIC

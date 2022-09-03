@@ -1,32 +1,16 @@
-# Prerequisites
-*.d
+bin
+lib
+build
+cmake-build-debug
+py/test
+py/result
+py/result*.txt
+py/plot_*.pdf
 
-# Compiled Object files
-*.slo
-*.lo
-*.o
-*.obj
+third_party/bin
+third_party/include
+third_party/lib
 
-# Precompiled Headers
-*.gch
-*.pch
+*.tar.gz
 
-# Compiled Dynamic libraries
-*.so
-*.dylib
-*.dll
-
-# Fortran module files
-*.mod
-*.smod
-
-# Compiled Static libraries
-*.lai
-*.la
-*.a
-*.lib
-
-# Executables
-*.exe
-*.out
-*.app
+.idea

@@ -6,7 +6,7 @@
 #include "raft_node.h"
 
 class raft_test_context {
-public:
+ public:
 
   raft_test_context() : checked_index_(0) {}
 

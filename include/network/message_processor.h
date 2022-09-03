@@ -7,45 +7,79 @@
 #include "common/ptr.hpp"
 #include "proto/proto.h"
 #include "network/connection.h"
+#include "common/utils.h"
 
 class processor {
-public:
+ public:
   virtual ~processor() {}
-  virtual result<void> process(ptr<connection> conn, message_type id, byte_buffer &buffer) = 0;
+
+  virtual result<void> process(
+      ptr<connection> conn,
+      message_type id,
+      byte_buffer &buffer,
+      msg_hdr *hdr
+  ) = 0;
+
+  virtual result<void> process_msg(
+      ptr<connection> conn,
+      message_type id,
+      ptr<google::protobuf::Message> msg
+  ) = 0;
+
   virtual processor *clone(void *block_ptr) = 0;
 };
 
 class block_handler {
-public:
+ public:
   template<typename T>
-  result<void> handle_message(const ptr<connection> &, message_type, const T &) {
+  result<void> handle_message(
+      const ptr<connection> &,
+      message_type,
+      const ptr<T>) {
     return outcome::success();
   }
 };
 
 template<typename T, typename B_PTR=ptr<block_handler>>
 class message_processor : public processor {
-public:
+ public:
   message_processor() {
 
   }
 
-  result<void> process(ptr<connection> conn, message_type id, byte_buffer &buffer) override {
-    auto r1 = buf_to_pb(buffer, message_);
-    if (not r1) {
-      return r1;
-    }
-    auto r2 = b_ptr_->handle_message(conn, id, message_);
+  result<void> process_msg(
+      ptr<connection> conn,
+      message_type id,
+      ptr<google::protobuf::Message> msg
+  ) {
+    auto msg_t = std::static_pointer_cast<T>(msg);
+    auto r2 = b_ptr_->handle_message(conn, id, msg_t);
     if (not r2) {
       return r2;
     }
     return r2;
   }
 
+  result<void> process(
+      ptr<connection> conn,
+      message_type id,
+      byte_buffer &buffer,
+      msg_hdr *hdr) override {
+    ptr<T> message(new T());
+    if (hdr != nullptr) {
+    }
+    auto r1 = buf_to_pb(buffer, *message);
+    if (not r1) {
+      return r1;
+    }
+    auto r2 = this->process_msg(conn, id, message);
+    return r2;
+  }
+
   processor *clone(void *p) override {
     message_processor<T, B_PTR> *r = new message_processor<T, B_PTR>();
     if (p) {
-      r->b_ptr_ = *((B_PTR *)(p));
+      r->b_ptr_ = *((B_PTR *) (p));
     } else {
       r->b_ptr_ = b_ptr_;
     }
@@ -53,25 +87,35 @@ public:
     return r;
   }
 
-private:
+ private:
   B_PTR b_ptr_;
   T message_;
 };
 
 template<typename B_PTR = ptr<block_handler>>
 class processor_sink : public processor {
-public:
+ public:
   processor_sink() : b_(nullptr), b_type_(MESSAGE_BLOCK_INVALID) {
     init();
   }
+
   processor_sink(B_PTR b, message_block bt) : b_(b), b_type_(bt) {
     init();
   }
 
-  result<void> process(ptr<connection> conn, message_type id, byte_buffer &buffer) override {
+  result<void> process(ptr<connection> conn, message_type id, byte_buffer &buffer, msg_hdr *hdr) override {
     processor *p = processor_[id];
     if (p) {
-      return p->process(conn, id, buffer);
+      return p->process(conn, id, buffer, hdr);
+    } else {
+      return outcome::failure(EC::EC_NOT_FOUND_ERROR);
+    }
+  }
+
+  result<void> process_msg(ptr<connection> conn, message_type id, ptr<google::protobuf::Message> msg_ptr) override {
+    processor *p = processor_[id];
+    if (p) {
+      return p->process_msg(conn, id, msg_ptr);
     } else {
       return outcome::failure(EC::EC_NOT_FOUND_ERROR);
     }
@@ -83,13 +127,14 @@ public:
   }
 
   ~processor_sink() override {
-    for (auto &id: processor_) {
+    for (auto &id : processor_) {
       if (id) {
         delete id;
         id = nullptr;
       }
     }
   }
+
   message_block message_block_type() const {
     return b_type_;
   }
@@ -98,12 +143,12 @@ public:
     return block_[t];
   }
 
-private:
+ private:
   void init() {
     block_.resize(MESSAGE_END + 1, MESSAGE_BLOCK_INVALID);
-    for (const auto &kv1: id2processor_) {
+    for (const auto &kv1 : id2processor_) {
       message_block t1 = kv1.first;
-      for (auto kv2: kv1.second) {
+      for (auto kv2 : kv1.second) {
         message_type t2 = kv2.first;
         block_[t2] = t1;
       }
@@ -111,7 +156,7 @@ private:
     processor_.resize(MESSAGE_END + 1, nullptr);
     auto i = id2processor_.find(b_type_);
     if (i != id2processor_.end()) {
-      for (auto kv: i->second) {
+      for (auto kv : i->second) {
         processor *p = kv.second;
         if (p) {
           processor_[kv.first] = p->clone(&b_);
@@ -119,12 +164,12 @@ private:
       }
     }
   };
-private:
+ private:
   B_PTR b_;
   message_block b_type_;
   std::vector<processor *> processor_;
   std::vector<message_block> block_;
-private:
+ private:
   static std::map<message_block, std::map<message_type, processor *>> id2processor_;
 };
 
@@ -153,6 +198,7 @@ std::map<message_block, std::map<message_type, processor *>> processor_sink<B_PT
             {CLIENT_TX_REQ, NP(tx_request)},
             {TX_TM_COMMIT, NP(tx_tm_commit)},
             {TX_TM_ABORT, NP(tx_tm_abort)},
+            {TX_TM_END, NP(tx_tm_end)},
             {TX_RM_PREPARE, NP(tx_rm_prepare)},
             {TX_RM_ACK, NP(tx_rm_ack)},
             {TX_TM_REQUEST, NP(tx_request)},
@@ -173,7 +219,6 @@ std::map<message_block, std::map<message_type, processor *>> processor_sink<B_PT
             {C2D_READ_DATA_REQ, NP(ccb_read_request)},
             {R2D_REGISTER_RESP, NP(rlb_register_dsb_response)},
             {CLIENT_LOAD_DATA_REQ, NP(client_load_data_request)},
-
         }
         },
         {MESSAGE_BLOCK_RLB, {

@@ -3,7 +3,7 @@
 bool raft_test_context::check_max_committed_logs(node_id_t node_id) {
   std::scoped_lock l(mutex_);
   std::map<node_id_t, uint64_t> max_committed_log_index;
-  for (const auto &n: nodes_) {
+  for (const auto &n : nodes_) {
     if (not n.second->log_.empty()) {
       max_committed_log_index[n.first] = n.second->log_.rbegin()->first;
     } else {
@@ -16,7 +16,7 @@ bool raft_test_context::check_max_committed_logs(node_id_t node_id) {
   }
   uint64_t committed_index = i->second;
   uint32_t num_le = 0;
-  for (const auto &kv: max_committed_log_index) {
+  for (const auto &kv : max_committed_log_index) {
     if (kv.second <= committed_index) {
       num_le++;
     }
@@ -31,7 +31,7 @@ bool raft_test_context::check_at_most_one_leader_per_term(node_id_t node_id, uin
   if (is_lead_node_.size() == nodes_.size()) {
     uint32_t lead = 0;
     uint32_t follower = 0;
-    for (auto kv: is_lead_node_) {
+    for (auto kv : is_lead_node_) {
       lead += kv.second ? 1 : 0;
       follower += kv.second ? 1 : 0;
       if (term != node_term_[kv.first]) {
@@ -58,9 +58,9 @@ bool raft_test_context::check_commit_entries(node_id_t node_id,
   if (entries.empty()) {
     return true;
   }
-  for (auto &e: entries) {
+  for (auto &e : entries) {
     uint64_t index = e->index();
-    for (auto &l: e->xlog()) {
+    for (auto &l : e->xlog()) {
       xid_t x = l.xid();
       if (commit_xid_[node_id] < x) {
         commit_xid_[node_id] = x;
@@ -69,7 +69,7 @@ bool raft_test_context::check_commit_entries(node_id_t node_id,
     if (checked_index_ < e->index()) {
       uint32_t num_committed = 0;
       std::map<std::string, std::string> message;
-      for (auto p: nodes_) {
+      for (auto p : nodes_) {
         std::scoped_lock lock(p.second->mutex_);
         auto node = p.second;
         bool commit = false;
@@ -103,7 +103,7 @@ bool raft_test_context::check_commit_entries(node_id_t node_id,
 void raft_test_context::wait_tx_commit(uint64_t index) {
   while (true) {
     uint64_t n = 0;
-    for (const auto &kv: commit_xid_) {
+    for (const auto &kv : commit_xid_) {
       if (kv.second == index) {
         n++;
       }
@@ -116,10 +116,10 @@ void raft_test_context::wait_tx_commit(uint64_t index) {
 }
 
 void raft_test_context::stop_and_join() {
-  for (const auto &n: nodes_) {
+  for (const auto &n : nodes_) {
     n.second->stop();
   }
-  for (const auto &n: nodes_) {
+  for (const auto &n : nodes_) {
     n.second->join();
   }
 }

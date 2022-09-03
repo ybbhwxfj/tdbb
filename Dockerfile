@@ -6,7 +6,19 @@ RUN rm -rf /root/.ssh
 RUN ssh-keygen -q -t rsa -N '' -f /root/.ssh/id_rsa
 RUN cat /root/.ssh/id_rsa.pub > /root/.ssh/authorized_keys
 
+RUN rm -rf /root/block-db
+
 COPY . /root/block-db
+
+RUN echo 'root:root' | chpasswd
+RUN echo '{\n\
+    "user": "root",\n\
+    "password": "root"\n\
+}' > /root/block-db/conf/user.conf.json
+
+RUN cp /root/block-db/conf/docker.node.conf.sndb.b.json /root/block-db/conf/node.conf.sndb.b.json
+RUN cp /root/block-db/conf/docker.node.conf.sdb.ub.json /root/block-db/conf/node.conf.sdb.ub.json
+RUN cp /root/block-db/conf/docker.node.conf.sdb.b.json /root/block-db/conf/node.conf.sdb.b.json
 
 RUN echo 'Asia/Shanghai' > /etc/timezone
 RUN ln -s -f /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
@@ -23,5 +35,6 @@ RUN cd /root/block-db && \
     cd build && \
     cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo .. && \
     make -j
+
 
 ENTRYPOINT service ssh restart && bash

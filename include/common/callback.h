@@ -11,7 +11,7 @@
 #include <vector>
 
 typedef std::function<void(EC)> fn_ec;
-typedef std::function<void(EC, const tuple_pb &)> fn_ec_tuple;
+typedef std::function<void(EC, tuple_pb && /*move*/)> fn_ec_tuple;
 
 class log_entry;
 
@@ -74,6 +74,7 @@ extern callback global_callback_;
 inline void set_global_callback(callback c) {
   global_callback_ = std::move(c);
 }
+
 inline const callback &get_global_callback() {
   return global_callback_;
 }

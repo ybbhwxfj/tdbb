@@ -3,6 +3,7 @@
 #include "proto/proto.h"
 #include <utility>
 #include "concurrency/lock_slot.h"
+#include "common/define.h"
 
 lock_slot::lock_slot(
     lock_mgr_trait *mgr,
@@ -26,7 +27,7 @@ lock_slot::~lock_slot() {
   read_count_ = 0;
 }
 
-bool lock_slot::lock(lock_mode type, const ptr<tx> &tx, oid_t oid) {
+bool lock_slot::lock(lock_mode type, const ptr<tx_rm> &tx, oid_t oid) {
   std::scoped_lock l(mutex_);
   bool ok = false;
   if (type == LOCK_READ_ROW || type == LOCK_READ_PREDICATE) {
@@ -46,12 +47,12 @@ void lock_slot::unlock(xid_t tx) {
   assert_check();
 }
 
-void lock_slot::make_violable(lock_mode, xid_t tx) {
+void lock_slot::make_violable(lock_mode, xid_t tx, violate &v) {
   std::scoped_lock l(mutex_);
-  make_violable(tx);
+  make_violable(tx, v);
 }
 
-bool lock_slot::add_wait(const ptr<tx> &ctx, oid_t oid, lock_mode type) {
+bool lock_slot::add_wait(const ptr<tx_rm> &ctx, oid_t oid, lock_mode type) {
   xid_t xid = ctx->xid();
   auto i = info_.find(xid);
   if (i != info_.end()) {
@@ -59,19 +60,23 @@ bool lock_slot::add_wait(const ptr<tx> &ctx, oid_t oid, lock_mode type) {
     i->second.oid_.push_back(oid);
     return false;
   } else {
+    auto info = tx_info(ctx, oid, type, false);
+#ifdef TX_TRACE
+    info.trace_ += std::to_string(tuple_id_) + ":" + std::to_string(oid);
+#endif
+    info_.insert(std::make_pair(ctx->xid(), std::move(info)));
+    wait_.push_back(ctx->xid());
+    // after insert tx_info, build dependency
 #ifdef DB_TYPE_NON_DETERMINISTIC
     if (is_non_deterministic()) {
       async_add_dependency(ctx);
     }
 #endif
-    info_.insert(std::make_pair(ctx->xid(),
-                                tx_info(ctx, oid, type, false)));
-    wait_.push_back(ctx->xid());
     return true;
   }
 }
 
-bool lock_slot::add_read(const ptr<tx> &ctx, oid_t oid, lock_mode mode) {
+bool lock_slot::add_read(const ptr<tx_rm> &ctx, oid_t oid, lock_mode mode) {
   auto i = info_.find(ctx->xid());
   if (i != info_.end()) {
     if (i->second.acquired_) {
@@ -87,12 +92,16 @@ bool lock_slot::add_read(const ptr<tx> &ctx, oid_t oid, lock_mode mode) {
     read_count_++;
     read_violate_count_++;
     read_.push_back(ctx->xid());
-    info_.insert(std::make_pair(ctx->xid(), tx_info(ctx, oid, mode, true)));
+    auto info = tx_info(ctx, oid, mode, true);
+#ifdef TX_TRACE
+    info.trace_ += std::to_string(tuple_id_) + ":" + std::to_string(oid);
+#endif
+    info_.insert(std::make_pair(ctx->xid(), info));
     return true;
   }
 }
 
-bool lock_slot::add_write(const ptr<tx> &ctx, oid_t oid) {
+bool lock_slot::add_write(const ptr<tx_rm> &ctx, oid_t oid) {
   auto i = info_.find(ctx->xid());
   if (i != info_.end()) {
     if (i->second.acquired_) {
@@ -108,14 +117,17 @@ bool lock_slot::add_write(const ptr<tx> &ctx, oid_t oid) {
     write_count_++;
     write_violate_count_++;
     write_.push_back(ctx->xid());
+    auto info = tx_info(ctx, oid, LOCK_WRITE_ROW, true);
+#ifdef TX_TRACE
+    info.trace_ += std::to_string(tuple_id_) + ":" + std::to_string(oid);
+#endif
     info_.insert(std::make_pair(
-        ctx->xid(),
-        tx_info(ctx, oid, LOCK_WRITE_ROW, true)));
+        ctx->xid(), info));
     return true;
   }
 }
 
-bool lock_slot::read_lock(const ptr<tx> &ctx, oid_t oid, lock_mode mode) {
+bool lock_slot::read_lock(const ptr<tx_rm> &ctx, oid_t oid, lock_mode mode) {
   BOOST_ASSERT(read_count_ == read_.size());
 
   auto p = acquire_read_lock(ctx, oid, mode);
@@ -149,7 +161,7 @@ bool lock_slot::read_lock(const ptr<tx> &ctx, oid_t oid, lock_mode mode) {
   return acquire;
 }
 
-bool lock_slot::write_lock(const ptr<tx> &ctx, oid_t oid) {
+bool lock_slot::write_lock(const ptr<tx_rm> &ctx, oid_t oid) {
   bool acquire = false;
   bool violate = false;
   if (write_count_ == 0 && read_count_ == 0) {
@@ -200,7 +212,7 @@ bool lock_slot::write_lock(const ptr<tx> &ctx, oid_t oid) {
   return acquire;
 }
 
-std::pair<bool, bool> lock_slot::acquire_read_lock(const ptr<tx> &ctx, oid_t oid, lock_mode mode) {
+std::pair<bool, bool> lock_slot::acquire_read_lock(const ptr<tx_rm> &ctx, oid_t oid, lock_mode mode) {
   bool acquire = false;
   bool violate = false;
   if (write_count_ == 0) {
@@ -240,8 +252,10 @@ void lock_slot::unlock_gut(xid_t xid) {
       && (not wait_.empty() && info_.find(wait_.front())->second.type_ == LOCK_READ_ROW)));
 }
 
-void lock_slot::make_violable(xid_t xid) {
+void lock_slot::make_violable(xid_t xid, violate &v) {
   bool notify = false;
+  uint32_t write_v = 0;
+  uint32_t read_v = 0;
   auto iter = info_.find(xid);
   if (iter != info_.end()) {
     if (not iter->second.violate_ && iter->second.acquired_) {
@@ -249,13 +263,15 @@ void lock_slot::make_violable(xid_t xid) {
         BOOST_ASSERT(iter->second.type_ == LOCK_WRITE_ROW);
         if (not iter->second.violate_) { // exactly once
           iter->second.violate_ = true;
+          write_v = write_count_ - write_violate_count_;
           write_violate_count_--;
           notify = write_violate_count_ == 0;
         }
       } else {
         if (not iter->second.violate_) { // exactly once
-          read_violate_count_--;
           iter->second.violate_ = true;
+          read_v = read_count_ - read_violate_count_;
+          read_violate_count_--;
           notify = read_violate_count_ == 0;
         }
       }
@@ -267,6 +283,8 @@ void lock_slot::make_violable(xid_t xid) {
   BOOST_ASSERT(not(write_violate_count_ == 0 && read_violate_count_ == 0 && (not wait_.empty())));
   BOOST_ASSERT(not(write_violate_count_ == 0
       && (not wait_.empty() && info_.find(wait_.front())->second.type_ == LOCK_READ_ROW)));
+  v.read_v_ = read_v;
+  v.write_v_ = write_v;
 }
 
 bool lock_slot::remove_lock(xid_t xid) {
@@ -331,7 +349,7 @@ void lock_slot::notify_lock_acquire() {
               || write_violate_count_ == 0)) {
         if (i->second.type_ == LOCK_READ_PREDICATE) {
           if (mgr_) {
-            // TODO, possible multiple same access predicate in one tx
+            // TODO, possible multiple same access predicate in one tx_rm
             if (mgr_->conflict(i->second.ctx_->xid(), 0, *i->second.predicate_)) {
               break;
             }
@@ -356,7 +374,7 @@ void lock_slot::notify_lock_acquire() {
     }
   }
 
-  for (xid_t x: notify_tx) {
+  for (xid_t x : notify_tx) {
     auto i = info_.find(x);
     if (i != info_.end()) {
       i->second.acquired_ = true;
@@ -369,7 +387,7 @@ void lock_slot::notify_lock_acquire() {
         write_violate_count_++;
         write_.push_back(x);
       }
-      for (oid_t oid: i->second.oid_) {
+      for (oid_t oid : i->second.oid_) {
         on_lock_acquired(EC::EC_OK, i->second.type_, i->second.ctx_, oid);
       }
     } else {
@@ -378,8 +396,8 @@ void lock_slot::notify_lock_acquire() {
   }
 
   // not exists such case:
-  // 1. no read or write locks are holding, but there is any waiting tx;
-  // 2. no write locks are holding, but there is any waiting tx want to acquire read lock.
+  // 1. no read or write locks are holding, but there is any waiting tx_rm;
+  // 2. no write locks are holding, but there is any waiting tx_rm want to acquire read lock.
   BOOST_ASSERT(not(read_count_ == 0 && write_count_ == 0 && (not wait_.empty())));
   BOOST_ASSERT(not(write_count_ == 0
       && (not wait_.empty() && info_.find(wait_.front())->second.type_ == LOCK_READ_ROW)));
@@ -391,44 +409,58 @@ void lock_slot::notify_lock_acquire() {
 }
 
 void lock_slot::debug_lock(std::ostream &os) {
-  for (auto x: read_) {
-    os << " " << x << " R lock ";
-    os << "oid [";
-    for (oid_t oid: info_.find(x)->second.oid_) {
-      os << oid;
+  for (auto x : read_) {
+    os << " " << x << " R lock";
+
+    auto iter = info_.find(x);
+    if (iter != info_.end()) {
+      #ifdef TEST_TRACE_LOCK
+      os << " ctime: " << boost::posix_time::to_iso_extended_string(iter->second.time_acquire_);
+      #endif
+      os << " oid [";
+      for (oid_t oid : iter->second.oid_) {
+        os << oid;
+      }
+      os << "] ";
+      os << iter->second.trace_ << std::endl;
     }
-    os << "]" << std::endl;
   }
-  for (auto x: write_) {
+  for (auto x : write_) {
     os << " " << x << " W lock ";
-    os << "oid [";
-    for (oid_t oid: info_.find(x)->second.oid_) {
-      os << oid;
+    auto iter = info_.find(x);
+    if (iter != info_.end()) {
+      #ifdef TEST_TRACE_LOCK
+      os << "ctime: " << boost::posix_time::to_iso_extended_string(iter->second.time_acquire_);
+      #endif
+      os << " oid [";
+      for (oid_t oid : iter->second.oid_) {
+        os << oid;
+      }
+      os << "] ";
+      os << iter->second.trace_ << std::endl;
     }
-    os << "]" << std::endl;
   }
-  for (auto x: wait_) {
+  for (auto x : wait_) {
     os << " " << x << " Wait " << enum2str(info_.find(x)->second.type_);
-    os << " oid [";
-    for (oid_t oid: info_.find(x)->second.oid_) {
-      os << oid;
+    auto iter = info_.find(x);
+    if (iter != info_.end()) {
+      #ifdef TEST_TRACE_LOCK
+      os << "ctime: " << boost::posix_time::to_iso_extended_string(iter->second.time_acquire_);
+      #endif
+      os << " oid [";
+      for (oid_t oid : iter->second.oid_) {
+        os << oid;
+      }
+      os << "]";
+      os << iter->second.trace_ << std::endl;
     }
-    os << "]" << std::endl;
   }
 }
 
 void lock_slot::build_dependency(tx_wait_set &ds) {
   std::scoped_lock l(mutex_);
-  for (auto x: wait_) {
-    auto i = info_.find(x);
-    if (i != info_.end()) {
-      if (i->second.type_ == LOCK_READ_ROW) {
-        ds.add(write_, x);
-      } else if (i->second.type_ == LOCK_WRITE_ROW) {
-        ds.add(read_, x);
-        ds.add(write_, x);
-      }
-    }
+  for (auto x : wait_) {
+    tx_build_dependency(x, ds);
   }
 }
 
@@ -440,13 +472,13 @@ void lock_slot::assert_check() {
 
 #ifdef DB_TYPE_GEO_REP_OPTIMIZE
 
-void lock_slot::dlv_acquire(EC ec, const ptr<tx> &ctx, oid_t, const ptr<std::vector<ptr<tx_context>>> &in) {
+void lock_slot::dlv_acquire(EC ec, const ptr<tx_rm> &ctx, oid_t, const ptr<std::vector<ptr<tx_context>>> &in) {
   dynamic_cast<tx_context *>(ctx.get())->notify_lock_acquire(ec, in);
 }
 
 void lock_slot::dependency_write_read(std::vector<ptr<tx_context>> &in) {
   if (write_violate_count_ == 0 && write_count_ > 0) {
-    for (const auto &i: info_) {
+    for (const auto &i : info_) {
       if (i.second.type_ == LOCK_WRITE_ROW) {
         in.push_back(static_pointer_cast<tx_context>(i.second.ctx_));
       }
@@ -456,7 +488,7 @@ void lock_slot::dependency_write_read(std::vector<ptr<tx_context>> &in) {
 
 #endif  // DB_TYPE_GEO_REP_OPTIMIZE
 
-result<void> lock_slot::wait_timeout(xid_t xid, tx_wait_set &ws) {
+result<void> lock_slot::tx_wait_for(xid_t xid, tx_wait_set &ws) {
   std::scoped_lock l(mutex_);
   auto i = info_.find(xid);
   if (i == info_.end()) {
@@ -465,22 +497,34 @@ result<void> lock_slot::wait_timeout(xid_t xid, tx_wait_set &ws) {
     if (i->second.acquired_) {
       return outcome::failure(EC::EC_NOT_FOUND_ERROR);
     } else {
-      build_dependency(ws);
+      tx_build_dependency(xid, ws);
       return outcome::success();
     }
   }
 }
 
-void lock_slot::async_add_dependency(const ptr<tx> &ctx) {
+void lock_slot::async_add_dependency(const ptr<tx_rm> &ctx) {
   ptr<lock_slot> lock = shared_from_this();
   xid_t xid = ctx->xid();
   auto fn = [xid, lock](tx_wait_set &ws) {
-    return lock->wait_timeout(xid, ws);
+    return lock->tx_wait_for(xid, ws);
   };
   mgr_->async_wait_lock(fn);
 }
 
-bool lock_slot::predicate_conflict(xid_t xid, oid_t oid, ptr<tx> txn) {
+void lock_slot::tx_build_dependency(xid_t x, tx_wait_set &ds) {
+  auto i = info_.find(x);
+  if (i != info_.end()) {
+    if (i->second.type_ == LOCK_READ_ROW) {
+      ds.add(write_, x);
+    } else if (i->second.type_ == LOCK_WRITE_ROW) {
+      ds.add(read_, x);
+      ds.add(write_, x);
+    }
+  }
+}
+
+bool lock_slot::predicate_conflict(xid_t xid, oid_t oid, ptr<tx_rm> txn) {
   std::scoped_lock l(mutex_);
   bool acquire = false;
   if (write_count_ == 0) {
@@ -504,12 +548,16 @@ bool lock_slot::predicate_conflict(xid_t xid, oid_t oid, ptr<tx> txn) {
     } else {
       wait_.push_back(xid);
     }
-    info_.insert(std::make_pair(xid, tx_info(txn, oid, LOCK_READ_PREDICATE, acquire)));
+    auto info = tx_info(txn, oid, LOCK_READ_PREDICATE, acquire);
+#ifdef TX_TRACE
+    info.trace_ += std::to_string(tuple_id_) + ":" + std::to_string(oid);
+#endif
+    info_.insert(std::make_pair(xid, std::move(info)));
   }
 
   return acquire;
 }
-void lock_slot::on_lock_acquired(EC ec, lock_mode mode, ptr<tx> txn, oid_t oid) {
+void lock_slot::on_lock_acquired(EC ec, lock_mode mode, ptr<tx_rm> txn, oid_t oid) {
   if (fn_after_) {
     tx_cmd_type cmd =
         mode == LOCK_READ_ROW || mode == LOCK_READ_PREDICATE
@@ -520,5 +568,5 @@ void lock_slot::on_lock_acquired(EC ec, lock_mode mode, ptr<tx> txn, oid_t oid) 
                     table_id_,
                     tuple_id_));
   }
-  txn->lock_acquire(ec, oid);
+  txn->async_lock_acquire(ec, oid);
 }

@@ -1,0 +1,229 @@
+Skip to Content
+Workbench
+Expenses
+Tickets
+ICP
+Support
+Elastic Compute Service
+
+    Overview
+    Events
+    Tags
+    Troubleshooting
+    ECS Cloud Assistant
+    Applications
+    Instances & Images
+        Instances
+        Images
+        Elastic Container
+        Instance
+        Dedicated Hosts
+        cloudBox
+        Super Computing Clusters
+        Reserved Instances
+        Resource Assurance
+        Savings Plan
+    Network & Security
+        Security Groups
+        ENIs
+        SSH Key Pairs
+        Virtual Private Clou...
+        Prefix Lists
+    Storage & Snapshots
+        Disks
+        Snapshots
+        Storage Capacity Units
+        Dedicated Block Stor...
+        NAS
+    Deployment & Elasticity
+        Launch Templates
+        Deployment Sets
+        Resource Orchestration
+        Service
+        Auto Provisioning
+        Auto Scaling
+        Image Builder
+        Server Migration Cen...
+    Maintenance & Monitoring
+        Operation Orchestration
+        Service
+        ECS Cloud Assistant
+        Troubleshooting
+        Migration Plan
+        Operation Logs
+        Tasks
+        CloudMonitor
+    Recommended Services
+
+let's go
+Elastic Compute ServiceInstances
+Instances
+	Instance ID/Name	Tag		Monitoring
+Zone
+	IP Address
+Status
+
+Network Type
+	Specifications
+Billing Method
+	Actions
+
+
+i-8vb4mg7j0iivowiv9sny
+
+launch-advisor-20220224
+
+
+
+
+	Zhangjiakou Zone B
+
+39.101.199.146(Public)
+
+172.26.215.36(Private)
+	Running
+
+VPC
+
+
+8 vCPU 32 GiB （I/O Optimized）
+
+ecs.g6.2xlarge   50Mbps (Peak Value)
+
+
+Pay-As-You-Go-Preemptible Instance
+
+February 24, 2022, 20:08 Created
+
+Manage |Connect
+|More
+
+
+i-8vb0avlq7m9rkrwdyd7z
+
+launch-advisor-20220222004
+
+
+
+
+	Zhangjiakou Zone B
+
+39.103.189.157(Public)
+
+172.26.215.33(Private)
+	Running
+
+VPC
+
+
+8 vCPU 32 GiB （I/O Optimized）
+
+ecs.g6.2xlarge   50Mbps (Peak Value)
+
+
+Pay-As-You-Go-Preemptible Instance
+
+February 24, 2022, 19:11 Created
+
+Manage |Connect
+|More
+
+
+i-8vb0avlq7m9rkrwdyd7x
+
+launch-advisor-20220222002
+
+
+
+
+	Zhangjiakou Zone B
+
+39.103.237.60(Public)
+
+172.26.215.34(Private)
+	Running
+
+VPC
+
+
+8 vCPU 32 GiB （I/O Optimized）
+
+ecs.g6.2xlarge   50Mbps (Peak Value)
+
+
+Pay-As-You-Go-Preemptible Instance
+
+February 24, 2022, 19:11 Created
+
+Manage |Connect
+|More
+
+
+i-8vb0avlq7m9rkrwdyd7y
+
+launch-advisor-20220222003
+
+
+
+
+	Zhangjiakou Zone B
+
+39.101.179.211(Public)
+
+172.26.215.32(Private)
+	Running
+
+VPC
+
+
+8 vCPU 32 GiB （I/O Optimized）
+
+ecs.g6.2xlarge   50Mbps (Peak Value)
+
+
+Pay-As-You-Go-Preemptible Instance
+
+February 24, 2022, 19:11 Created
+
+Manage |Connect
+|More
+
+
+i-8vb0avlq7m9rkrwdyd7w
+
+launch-advisor-20220222001
+
+
+
+
+	Zhangjiakou Zone B
+
+8.142.25.7(Public)
+
+172.26.215.35(Private)
+	Running
+
+VPC
+
+
+8 vCPU 32 GiB （I/O Optimized）
+
+ecs.g6.2xlarge   50Mbps (Peak Value)
+
+
+Pay-As-You-Go-Preemptible Instance
+
+February 24, 2022, 19:11 Created
+
+Manage |Connect
+|More
+
+Total: 5 item(s), Per Page:
+item(s)
+
+    «
+    ‹
+    1
+    ›
+    »
+

@@ -7,11 +7,11 @@
 BOOST_AUTO_TEST_CASE(test_json) {
   config_option opt;
   opt.num_az = NUM_AZ;
-  opt.num_shard = 3;
+  opt.num_shard = 5;
   opt.loose_bind = true;
   std::vector<std::string> conf_list = generate_config_json_file(opt);
 
-  for (const auto &c: conf_list) {
+  for (const auto &c : conf_list) {
     std::ifstream fsm(c);
     std::stringstream ssm;
     ssm << fsm.rdbuf();

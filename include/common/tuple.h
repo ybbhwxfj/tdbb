@@ -16,13 +16,13 @@ inline tuple_id_t uint64_to_key(uint64_t i) {
 }
 
 inline key_binary tupleid2binary(uint64_t i) {
-  return std::string((const char *)&i, sizeof(i));
+  return std::string((const char *) &i, sizeof(i));
 }
 
 inline uint64_t binary2tupleid(std::string s) {
   uint64_t i;
   BOOST_ASSERT(sizeof(i) == s.size());
-  memcpy(((void *)&i), s.c_str(), s.size());
+  memcpy(((void *) &i), s.c_str(), s.size());
   return i;
 }
 

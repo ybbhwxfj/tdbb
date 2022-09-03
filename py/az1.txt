@@ -1,0 +1,199 @@
+Skip to Content
+Workbench
+Expenses
+Tickets
+ICP
+Support
+Elastic Compute Service
+
+    Overview
+    Events
+    Tags
+    Troubleshooting
+    ECS Cloud Assistant
+    Applications
+    Instances & Images
+        Instances
+        Images
+        Elastic Container
+        Instance
+        Dedicated Hosts
+        cloudBox
+        Super Computing Clusters
+        Reserved Instances
+        Resource Assurance
+        Savings Plan
+    Network & Security
+        Security Groups
+        ENIs
+        SSH Key Pairs
+        Virtual Private Clou...
+        Prefix Lists
+    Storage & Snapshots
+        Disks
+        Snapshots
+        Storage Capacity Units
+        Dedicated Block Stor...
+        NAS
+    Deployment & Elasticity
+        Launch Templates
+        Deployment Sets
+        Resource Orchestration
+        Service
+        Auto Provisioning
+        Auto Scaling
+        Image Builder
+        Server Migration Cen...
+    Maintenance & Monitoring
+        Operation Orchestration
+        Service
+        ECS Cloud Assistant
+        Troubleshooting
+        Migration Plan
+        Operation Logs
+        Tasks
+        CloudMonitor
+    Recommended Services
+
+let's go
+Elastic Compute ServiceInstances
+Instances
+	Instance ID/Name	Tag		Monitoring
+Zone
+	IP Address
+Status
+
+Network Type
+	Specifications
+Billing Method
+	Actions
+
+
+i-wz910jvtzu1d1ip9gom0
+
+launch-advisor-20220224
+
+
+
+
+	Shenzhen Zone D
+
+47.107.90.216(Public)
+
+172.20.193.7(Private)
+	Running
+
+VPC
+
+
+8 vCPU 32 GiB （I/O Optimized）
+
+ecs.g6.2xlarge   50Mbps (Peak Value)
+
+
+Pay-As-You-Go-Preemptible Instance
+
+February 24, 2022, 20:09 Created
+
+Manage |Connect
+|More
+
+
+i-wz9i15y89fsz7fhwkl54
+
+launch-advisor-20220222003
+
+
+
+
+	Shenzhen Zone D
+
+120.24.46.69(Public)
+
+172.20.193.5(Private)
+	Running
+
+VPC
+
+
+8 vCPU 32 GiB （I/O Optimized）
+
+ecs.g6.2xlarge   50Mbps (Peak Value)
+
+
+Pay-As-You-Go-Preemptible Instance
+
+February 24, 2022, 19:11 Created
+
+Manage |Connect
+|More
+
+
+i-wz9i15y89fsz7fhwkl53
+
+launch-advisor-20220222002
+
+
+
+
+	Shenzhen Zone D
+
+120.76.103.74(Public)
+
+172.20.193.6(Private)
+	Running
+
+VPC
+
+
+8 vCPU 32 GiB （I/O Optimized）
+
+ecs.g6.2xlarge   50Mbps (Peak Value)
+
+
+Pay-As-You-Go-Preemptible Instance
+
+February 24, 2022, 19:11 Created
+
+Manage |Connect
+|More
+
+
+i-wz9i15y89fsz7fhwkl52
+
+launch-advisor-20220222001
+
+
+
+
+	Shenzhen Zone D
+
+120.24.233.54(Public)
+
+172.20.193.4(Private)
+	Running
+
+VPC
+
+
+8 vCPU 32 GiB （I/O Optimized）
+
+ecs.g6.2xlarge   50Mbps (Peak Value)
+
+
+Pay-As-You-Go-Preemptible Instance
+
+February 24, 2022, 19:11 Created
+
+Manage |Connect
+|More
+
+Total: 4 item(s), Per Page:
+item(s)
+
+    «
+    ‹
+    1
+    ›
+    »
+

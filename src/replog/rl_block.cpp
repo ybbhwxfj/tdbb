@@ -21,55 +21,62 @@ void rl_block::on_start() {
 void rl_block::on_stop() {
   state_machine_->on_stop();
   log_service_->on_stop();
+  // time_.print();
 }
 
-result<void> rl_block::rlb_handle_message(const ptr<connection> &, message_type, const ccb_register_ccb_request &m) {
-  handle_register_ccb(m);
+result<void> rl_block::rlb_handle_message(const ptr<connection> &,
+                                          message_type,
+                                          const ptr<ccb_register_ccb_request> m) {
+  handle_register_ccb(*m);
   return outcome::success();
 }
 
-result<void> rl_block::rlb_handle_message(const ptr<connection> &, message_type, const dsb_register_dsb_request &m) {
-  handle_register_dsb(m);
+result<void> rl_block::rlb_handle_message(const ptr<connection> &,
+                                          message_type,
+                                          const ptr<dsb_register_dsb_request> m) {
+  handle_register_dsb(*m);
   return outcome::success();
 }
 
-result<void> rl_block::rlb_handle_message(const ptr<connection> &, message_type, const ccb_append_log_request &m) {
-  handle_append_entries(m);
+result<void> rl_block::rlb_handle_message(const ptr<connection> &, message_type, const ptr<ccb_append_log_request> m) {
+  handle_append_entries(*m);
   return outcome::success();
 }
 
-result<void> rl_block::rlb_handle_message(const ptr<connection> &, message_type, const ccb_report_status_response &m) {
-  handle_report_status_response(m);
+result<void> rl_block::rlb_handle_message(const ptr<connection> &,
+                                          message_type,
+                                          const ptr<ccb_report_status_response> m) {
+  handle_report_status_response(*m);
   return outcome::success();
 }
 
-result<void> rl_block::rlb_handle_message(const ptr<connection> &, message_type, const request_vote_request &m) {
-  state_machine_->handle_request_vote_request(m);
+result<void> rl_block::rlb_handle_message(const ptr<connection> &, message_type, const ptr<request_vote_request> m) {
+  state_machine_->handle_request_vote_request(*m);
   return outcome::success();
 }
 
-result<void> rl_block::rlb_handle_message(const ptr<connection> &, message_type, const request_vote_response &m) {
-  state_machine_->handle_request_vote_response(m);
+result<void> rl_block::rlb_handle_message(const ptr<connection> &, message_type, const ptr<request_vote_response> m) {
+  state_machine_->handle_request_vote_response(*m);
   return outcome::success();
 }
 
-result<void> rl_block::rlb_handle_message(const ptr<connection> &, message_type, const append_entries_request &m) {
-  state_machine_->handle_append_entries_request(m);
+result<void> rl_block::rlb_handle_message(const ptr<connection> &, message_type, const ptr<append_entries_request> m) {
+  state_machine_->handle_append_entries_request(*m);
   return outcome::success();
 }
 
-result<void> rl_block::rlb_handle_message(const ptr<connection> &, message_type, const append_entries_response &m) {
-  state_machine_->handle_append_entries_response(m);
+result<void> rl_block::rlb_handle_message(const ptr<connection> &, message_type, const ptr<append_entries_response> m) {
+  state_machine_->handle_append_entries_response(*m);
   return outcome::success();
 }
 
-result<void> rl_block::rlb_handle_message(const ptr<connection> &, message_type, const transfer_leader &m) {
+result<void> rl_block::rlb_handle_message(const ptr<connection> &, message_type, const ptr<transfer_leader> m) {
   state_machine_->handle_transfer_leader(m);
   return outcome::success();
 }
 
-result<void> rl_block::rlb_handle_message(const ptr<connection> &, message_type, const transfer_notify &m) {
-  state_machine_->handle_transfer_notify(m);
+result<void> rl_block::rlb_handle_message(const ptr<connection> &, message_type, const ptr<transfer_notify> m) {
+  state_machine_->handle_transfer_notify(*m);
   return outcome::success();
 }
 
@@ -87,19 +94,19 @@ void rl_block::handle_register_ccb(const ccb_register_ccb_request &req) {
   }
 
   if (req.cno() != cno_ || ccb_node_id_ != node_id) {
-    service_->get_service(SERVICE_IO).dispatch([this, node_id]() {
+    service_->get_service(SERVICE_ASYNC_CONTEXT).dispatch([this, node_id]() {
       BOOST_LOG_TRIVIAL(trace) << node_name_ << " receive register_ccb request first time";
       response_ccb_register_with_logs(node_id);
     });
   } else {
     BOOST_LOG_TRIVIAL(trace) << node_name_ << " receive register_ccb request";
-    rlb_register_ccb_response res;
-    res.set_cno(s.term);
-    res.set_source(node_id_);
-    res.set_dest(req.source());
-    res.set_lead_node(s.lead_node);
-    res.set_dsb_node(dsb_node_id_);
-    res.set_is_lead(s.state == RAFT_STATE_LEADER);
+    auto res = std::make_shared<rlb_register_ccb_response>();
+    res->set_cno(s.term);
+    res->set_source(node_id_);
+    res->set_dest(req.source());
+    res->set_lead_node(s.lead_node);
+    res->set_dsb_node(dsb_node_id_);
+    res->set_is_lead(s.state == RAFT_STATE_LEADER);
     if (s.term != req.cno()) {
 
     }
@@ -119,11 +126,11 @@ void rl_block::handle_register_dsb(const dsb_register_dsb_request &dsb) {
       log_service_->set_dsb_id(dsb_node_id_);
     }
 
-    rlb_register_dsb_response res;
-    res.set_cno(s.term);
-    res.set_source(node_id_);
-    res.set_dest(dsb.source());
-    res.set_lead(s.state == RAFT_STATE_LEADER);
+    auto res = std::make_shared<rlb_register_dsb_response>();
+    res->set_cno(s.term);
+    res->set_source(node_id_);
+    res->set_dest(dsb.source());
+    res->set_lead(s.state == RAFT_STATE_LEADER);
     auto r = service_->async_send(dsb.source(),
                                   R2D_REGISTER_RESP, res);
     if (!r) {
@@ -141,7 +148,9 @@ void rl_block::handle_append_entries(const ccb_append_log_request
 }
 
 void rl_block::on_become_leader(uint64_t term) {
+#ifdef MULTI_THREAD_EXECUTOR
   std::scoped_lock l(mutex_);
+#endif
   if (fn_become_leader_) {
     fn_become_leader_(term);
   }
@@ -150,19 +159,21 @@ void rl_block::on_become_leader(uint64_t term) {
   //ccb_responsed_[ccb_node_id_] = false;
   //send_report(true);
 
-  panel_report msg;
-  msg.set_source(conf_.node_id());
-  msg.set_dest(conf_.panel_config().node_id());
-  msg.set_lead(true);
-  msg.set_report_type(RLB_NEW_TERM);
-  auto rs = service_->async_send(msg.dest(), message_type::PANEL_REPORT, msg);
+  auto msg = std::make_shared<panel_report>();
+  msg->set_source(conf_.node_id());
+  msg->set_dest(conf_.panel_config().node_id());
+  msg->set_lead(true);
+  msg->set_report_type(RLB_NEW_TERM);
+  auto rs = service_->async_send(msg->dest(), message_type::PANEL_REPORT, msg);
   if (not rs) {
     BOOST_LOG_TRIVIAL(error) << "send panel info report become leader error ";
   }
 }
 
 void rl_block::on_become_follower(uint64_t term) {
+#ifdef MULTI_THREAD_EXECUTOR
   std::scoped_lock l(mutex_);
+#endif
   cno_ = term;
   if (fn_become_follower_) {
     fn_become_follower_(term);
@@ -170,19 +181,21 @@ void rl_block::on_become_follower(uint64_t term) {
   BOOST_LOG_TRIVIAL(info) << node_name_ << " on become follower";
   //ccb_responsed_[ccb_node_id_] = false;
   //send_report(false);
-  panel_report msg;
-  msg.set_source(conf_.node_id());
-  msg.set_dest(conf_.panel_config().node_id());
-  msg.set_lead(false);
-  msg.set_report_type(RLB_NEW_TERM);
-  auto rs = service_->async_send(msg.dest(), message_type::PANEL_REPORT, msg);
+  auto msg = std::make_shared<panel_report>();
+  msg->set_source(conf_.node_id());
+  msg->set_dest(conf_.panel_config().node_id());
+  msg->set_lead(false);
+  msg->set_report_type(RLB_NEW_TERM);
+  auto rs = service_->async_send(msg->dest(), message_type::PANEL_REPORT, msg);
   if (not rs) {
     BOOST_LOG_TRIVIAL(error) << "send panel info report become follower error ";
   }
 }
 
 void rl_block::send_report(bool lead) {
+#ifdef MULTI_THREAD_EXECUTOR
   std::scoped_lock l(mutex_);
+#endif
   auto iter = ccb_responsed_.find(ccb_node_id_);
   if (iter != ccb_responsed_.end() && iter->second) {
     return;
@@ -192,19 +205,19 @@ void rl_block::send_report(bool lead) {
   }
   ccb_responsed_[ccb_node_id_] = false;
   BOOST_LOG_TRIVIAL(info) << node_name_ << " send report status to CCB " << id_2_name(ccb_node_id_);
-  rlb_report_status_to_ccb msg;
-  msg.set_dest(ccb_node_id_);
-  msg.set_source(node_id_);
-  msg.set_cno(cno_);
-  msg.set_rg_id(rg_id_);
-  msg.set_lead(lead);
+  auto msg = std::make_shared<rlb_report_status_to_ccb>();
+  msg->set_dest(ccb_node_id_);
+  msg->set_source(node_id_);
+  msg->set_cno(cno_);
+  msg->set_rg_id(rg_id_);
+  msg->set_lead(lead);
 
   auto r = service_->async_send(ccb_node_id_, R2C_REPORT_STATUS_REQ, msg);
   if (!r) {
 
   }
   timer_send_report_.reset(new boost::asio::steady_timer(
-      service_->get_service(SERVICE_HANDLE),
+      service_->get_service(SERVICE_ASYNC_CONTEXT),
       boost::asio::chrono::milliseconds(2000)));
   auto fn_timeout = [this, lead](const boost::system::error_code &) {
     send_report(lead);
@@ -241,26 +254,28 @@ void rl_block::response_commit_log(EC ec, const std::vector<ptr<log_entry>> &log
   if (logs.empty()) {
     return;
   }
-  rlb_commit_entries msg;
-  msg.set_error_code(ec);
-  msg.set_dest(ccb_node_id_);
-  msg.set_source(node_id_);
-  boost::posix_time::ptime now = boost::posix_time::microsec_clock::local_time();
-  uint64_t us = (now - start_).total_microseconds();
-  for (const ptr<log_entry> &log: logs) {
-    for (const tx_log &xlog: log->xlog()) {
-      tx_log *x = msg.add_logs();
+  auto msg = std::make_shared<rlb_commit_entries>();
+  msg->set_error_code(ec);
+  msg->set_dest(ccb_node_id_);
+  msg->set_source(node_id_);
+  auto now = std::chrono::steady_clock::now();
+  uint64_t current_us = to_microseconds(now - start_);
+  for (const ptr<log_entry> &log : logs) {
+    for (const tx_log &xlog : log->xlog()) {
+      tx_log *x = msg->add_logs();
       x->set_xid(xlog.xid());
       x->set_log_type(xlog.log_type());
-      x->set_repl_latency(us - xlog.repl_latency());
+      auto start_us = xlog.repl_latency();
+      auto latency = current_us - start_us;
+      x->set_repl_latency(latency);
     }
   }
 
-  uint32_t ms = conf_.get_test_config().wan_latency_ms();
+  uint32_t ms = conf_.get_test_config().debug_add_wan_latency_ms();
   if (ms > 0) { // only valid when debug ..
     ptr<boost::asio::steady_timer> timer(
         new boost::asio::steady_timer(
-            service_->get_service(SERVICE_RAFT),
+            service_->get_service(SERVICE_ASYNC_CONTEXT),
             boost::asio::chrono::milliseconds(ms)));
     timer->async_wait([msg, timer, this](const boost::system::error_code &error) {
       timer.get();
@@ -280,17 +295,17 @@ void rl_block::response_commit_log(EC ec, const std::vector<ptr<log_entry>> &log
 }
 
 void rl_block::response_ccb_register_with_logs(node_id_t node) {
-  rlb_register_ccb_response res;
-  fn_state fs = [&res](const slice &s) {
+  auto res = std::make_shared<rlb_register_ccb_response>();
+  fn_state fs = [res](const slice &s) {
     log_state state;
     bool ok = state.ParseFromArray(s.data(), int(s.size()));
     if (not ok) {
       BOOST_ASSERT(false);
     }
-    res.set_cno(state.term());
+    res->set_cno(state.term());
   };
-  fn_tx_log fl = [&res](const tx_log_index &, const slice &s) {
-    tx_log *log = res.add_logs();
+  fn_tx_log fl = [res](const tx_log_index &, const slice &s) {
+    tx_log *log = res->add_logs();
     bool ok = log->ParseFromArray(s.data(), int(s.size()));
     if (not ok) {
       BOOST_ASSERT(false);
@@ -300,13 +315,14 @@ void rl_block::response_ccb_register_with_logs(node_id_t node) {
   log_service_->retrieve_log(fl);
 
   sm_status s = state_machine_->status();
+#ifdef MULTI_THREAD_EXECUTOR
   std::scoped_lock l(mutex_);
-
-  res.set_cno(s.term);
-  res.set_source(node_id_);
-  res.set_dest(node);
-  res.set_dsb_node(dsb_node_id_);
-  res.set_is_lead(s.state == RAFT_STATE_LEADER);
+#endif
+  res->set_cno(s.term);
+  res->set_source(node_id_);
+  res->set_dest(node);
+  res->set_dsb_node(dsb_node_id_);
+  res->set_is_lead(s.state == RAFT_STATE_LEADER);
   auto r = service_->async_send(node, R2C_REGISTER_RESP, res);
   if (not r) {
     BOOST_LOG_TRIVIAL(error) << "send register CCB response error: " << r.error().message();

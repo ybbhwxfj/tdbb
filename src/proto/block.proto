@@ -28,17 +28,20 @@ message ccb_read_request {
   uint32 oid = 5;
   uint64 table_id = 6;
   uint64 tuple_id = 7;
+  uint64 debug_send_ts = 8;
+
 }
 
 message dsb_read_response {
   uint32 source = 1;
   uint32 dest = 2;
-  uint32 table_id = 3;
-  uint64 cno = 4;
-  uint64 xid = 5;
-  uint32 oid = 6;
-  uint32 error_code = 7;
-  tuple_row tuple_row = 8;
+  uint64 cno = 3;
+  uint64 xid = 4;
+  uint32 oid = 5;
+  uint32 error_code = 6;
+  uint64 latency_read_dsb = 7;
+  uint64 debug_send_ts = 8;
+  tuple_row tuple_row = 9;
 }
 
 message ccb_append_log_request {

@@ -11,7 +11,7 @@ void config::generate_mapping() {
   }
   re_generate_id();
   std::map<shard_id_t, std::map<node_id_t, uint32_t>> priority;
-  for (auto nc: node_config_list_) {
+  for (auto nc : node_config_list_) {
     if (nc.is_client()) {
       continue;
     }
@@ -20,9 +20,9 @@ void config::generate_mapping() {
     node2conf_[nc.node_id()] = nc;
     priority[nc.rg_id()][nc.node_id()] = nc.priority();
   }
-  for (auto kv: priority) {
+  for (auto kv : priority) {
     shard_id_t sid = kv.first;
-    for (auto p: kv.second) {
+    for (auto p : kv.second) {
       node_id_t node_id = p.first;
       uint32_t p_no = p.second;
       priority_[sid][p_no].push_back(node_id);
@@ -79,8 +79,8 @@ std::vector<node_id_t> config::get_rg_nodes(shard_id_t rg_id) const {
   const_cast_generate_mapping();
   auto i = rg2az2node_.find(rg_id);
   if (i != rg2az2node_.end()) {
-    for (auto kv: i->second) {
-      for (node_id_t id: kv.second) {
+    for (auto kv : i->second) {
+      for (node_id_t id : kv.second) {
         BOOST_ASSERT(rg_id == TO_RG_ID(id));
         vec.push_back(id);
       }
@@ -105,7 +105,7 @@ node_id_t config::get_largest_priority_node_of_shard(shard_id_t shard) const {
     return 0;
   }
 
-  for (auto nid: i->second.rbegin()->second) {
+  for (auto nid : i->second.rbegin()->second) {
     if (is_ccb_block(nid)) {
       return nid;
     }
@@ -116,7 +116,7 @@ node_id_t config::get_largest_priority_node_of_shard(shard_id_t shard) const {
 std::vector<node_id_t> config::get_rg_block_nodes(shard_id_t rg_id, block_type_id_t block_type) const {
   std::vector<node_id_t> ret;
   std::vector<node_id_t> vec = get_rg_nodes(rg_id);
-  for (node_id_t i: vec) {
+  for (node_id_t i : vec) {
     if (is_block_type(i, block_type)) {
       ret.push_back(i);
     }
@@ -136,7 +136,7 @@ void config::re_generate_id() {
 
   std::map<std::string, std::map<std::string, std::map<block_type_set, node_config *>>> rg2az2bt2node;
   std::map<std::string, node_config *> name2node;
-  for (node_config &c: node_config_list_) {
+  for (node_config &c : node_config_list_) {
     if (c.is_client()) {
       continue;
     }
@@ -149,10 +149,10 @@ void config::re_generate_id() {
   node_config *this_node = nullptr;
   std::string nname = node_name();
   std::vector<node_config *> register_rlb;
-  for (auto &rg2: rg2az2bt2node) {
+  for (auto &rg2 : rg2az2bt2node) {
     uint32_t az_id = 1;
-    for (auto &az2: rg2.second) {
-      for (auto &bt2: az2.second) {
+    for (auto &az2 : rg2.second) {
+      for (auto &bt2 : az2.second) {
         node_config *c = bt2.second;
         az2id.insert(std::make_pair(c->az_name(), az_id));
         c->set_az_id(az_id);
@@ -160,7 +160,7 @@ void config::re_generate_id() {
         node_id_t node_id = MAKE_NODE_ID(az_id, rg_id, c->block_type_list());
         c->set_node_id(node_id);
 
-        for (block_type_t bt: bt2.first) {
+        for (block_type_t bt : bt2.first) {
           if (bt == BLOCK_RLB) { // the node is a RLB node
             register_rlb.push_back(c);
           }
@@ -177,7 +177,7 @@ void config::re_generate_id() {
   if (nname != client_config_.node_name() && nname != panel_config_.node_name()) {
     BOOST_ASSERT(this_node != nullptr);
     node_conf_ = *this_node;
-    for (node_config *c: register_rlb) {
+    for (node_config *c : register_rlb) {
       if (c->rg_name() == this_node->rg_name() && c->az_name() == this_node->az_name()) {
         register_node_id_ = c->node_id();
         BOOST_ASSERT(is_rlb_block(register_node_id_));
@@ -215,7 +215,7 @@ boost::json::object config::to_json() {
   j["test"] = test_config_.to_json();
 
   boost::json::array nc_list;
-  for (auto nc: node_config_list_) {
+  for (auto nc : node_config_list_) {
     if (nc.is_client()) {
       continue;
     }
@@ -271,7 +271,9 @@ result<void> config::from_json_string(const std::string &json_string) {
     }
 
     from_json(jv.as_object());
-
+    if (not valid_check()) {
+      return outcome::failure(EC::EC_CONFIG_ERROR);
+    }
     return outcome::success();
   } catch (std::exception const &e) {
     BOOST_LOG_TRIVIAL(error) << "Parsing failed: " << e.what();
@@ -281,4 +283,14 @@ result<void> config::from_json_string(const std::string &json_string) {
 
 std::string config::node_debug_name() {
   return id_2_name(node_conf_.node_id());
+}
+
+bool config::valid_check() {
+  if (tpcc_config_.num_order_initialize_per_district() *
+      tpcc_config_.num_district_per_warehouse() *
+      tpcc_config_.num_warehouse() + tpcc_config_.num_new_order() > NUM_ORDER_MAX) {
+    BOOST_LOG_TRIVIAL(error) << "order id overflow";
+    return false;
+  }
+  return true;
 }

@@ -5,12 +5,14 @@
 
 lock_mgr::lock_mgr(
     table_id_t table_id,
-    ptr<deadlock> dl,
+    boost::asio::io_context &context,
+    deadlock *dl,
     fn_schedule_before fn_before,
     fn_schedule_after fn_after
 ) : table_id_(table_id),
-    dl_(std::move(dl)),
-    fn_before_(std::move(fn_before)), fn_after_(std::move(fn_after)) {}
+    dl_(dl),
+    fn_before_(std::move(fn_before)), fn_after_(std::move(fn_after)),
+    strand_(context) {}
 
 lock_mgr::~lock_mgr() = default;
 
@@ -18,10 +20,37 @@ void lock_mgr::lock(
     xid_t xid,
     oid_t oid,
     lock_mode lt,
-    const predicate &pred,
-    const ptr<tx> &txn) {
-  std::scoped_lock l(mutex_);
-  //BOOST_ASSERT(xid == tx->xid());
+    predicate pred,
+    ptr<tx_rm> txn) {
+
+  auto fn = [this, xid, oid, lt, pred, txn] { this->lock_gut(xid, oid, lt, pred, txn); };
+  boost::asio::post(strand_, fn);
+}
+
+void lock_mgr::unlock(uint64_t xid, lock_mode mode,
+                      predicate pred) {
+
+  auto fn = [this, xid, mode, pred] { this->unlock_gut(xid, mode, pred); };
+  boost::asio::post(strand_, fn);
+}
+
+void lock_mgr::make_violable(lock_mode lt, uint64_t xid,
+                             tuple_id_t key, violate v) {
+
+  auto fn = [this, lt, xid, key, v] {
+    this->make_violable_gut(lt, xid, key, v);
+  };
+  boost::asio::post(strand_, fn);
+}
+
+void lock_mgr::lock_gut(
+    xid_t xid,
+    oid_t oid,
+    lock_mode lt,
+    predicate pred,
+    ptr<tx_rm> txn) {
+
+  //BOOST_ASSERT(xid == tx_rm->xid());
   if (lt == LOCK_WRITE_ROW || lt == LOCK_READ_ROW) {
     tuple_id_t key = pred.key_;
     if (predicate_.empty()) {
@@ -62,14 +91,14 @@ void lock_mgr::lock(
     //predicate_ += std::make_pair(pred.interval_, tc_set);
 
     if (not conflict) {
-      txn->lock_acquire(EC::EC_OK, oid);
+      txn->async_lock_acquire(EC::EC_OK, oid);
     }
   }
 }
 
-void lock_mgr::unlock(uint64_t xid, lock_mode mode,
-                      const predicate &pred) {
-  std::scoped_lock l(mutex_);
+void lock_mgr::unlock_gut(uint64_t xid, lock_mode mode,
+                          predicate pred) {
+
   if (mode == LOCK_WRITE_ROW || mode == LOCK_READ_ROW) {
     std::pair<ptr<lock_slot>, bool> p = key_row_locks_.find(pred.key_);
     if (p.second) {
@@ -84,7 +113,7 @@ void lock_mgr::unlock(uint64_t xid, lock_mode mode,
         tx_conflict_set &s = i->second;
         auto ic = s.find(xid);
         if (ic != s.end()) {
-          for (tuple_id_t tuple_id: ic->second.write_) {
+          for (tuple_id_t tuple_id : ic->second.write_) {
             auto iwk = write_key_.find(tuple_id);
             if (iwk != write_key_.end()) {
               iwk->second->unlock(xid);
@@ -108,12 +137,12 @@ void lock_mgr::unlock(uint64_t xid, lock_mode mode,
 
 }
 
-void lock_mgr::make_violable(lock_mode lt, uint64_t xid,
-                             tuple_id_t key) {
-  std::scoped_lock l(mutex_);
+void lock_mgr::make_violable_gut(lock_mode lt, uint64_t xid,
+                                 tuple_id_t key, violate v) {
+
   std::pair<ptr<lock_slot>, bool> p = key_row_locks_.find(key);
   if (p.second) {
-    p.first->make_violable(lt, xid);
+    p.first->make_violable(lt, xid, v);
   } else {
     BOOST_ASSERT(false);
   }
@@ -125,7 +154,7 @@ void lock_mgr::debug_lock(std::ostream &os) {
     uint64_t k = (key);
     locks.insert(std::make_pair(k, l));
   });
-  for (const auto &kv: locks) {
+  for (const auto &kv : locks) {
     std::stringstream ssm;
     kv.second->debug_lock(ssm);
     if (!ssm.str().empty()) {
@@ -141,7 +170,7 @@ void lock_mgr::debug_dependency(tx_wait_set &dep) {
     uint64_t k = (key);
     locks.insert(std::make_pair(k, l));
   });
-  for (const auto &kv: locks) {
+  for (const auto &kv : locks) {
     kv.second->build_dependency(dep);
   }
 }
@@ -151,7 +180,7 @@ void lock_mgr::row_lock(
     oid_t oid,
     lock_mode lt,
     tuple_id_t key,
-    const ptr<tx> &tx) {
+    const ptr<tx_rm> &tx) {
   auto slot = get_lock_slot(key);
   if (slot) {
     slot->lock(lt, tx, oid);
@@ -187,8 +216,9 @@ ptr<lock_slot> lock_mgr::get_lock_slot(
         );
         write_key_.insert(std::make_pair(key, slot));
         slot->assert_check();
-        return std::make_pair(key, slot);
+        return slot;
       });
+  assert(slot->tuple_id() == key);
   return slot;
 }
 
@@ -197,7 +227,7 @@ bool lock_mgr::conflict(
     oid_t oid,
     const predicate &pred
 ) {
-  std::scoped_lock l(mutex_);
+
   std::set<tuple_id_t> tuple_ids;
   return find_conflict(xid, oid, nullptr, tuple_ids, pred);
 }
@@ -210,17 +240,17 @@ void lock_mgr::async_wait_lock(fn_wait_lock fn) {
 
 bool lock_mgr::find_conflict(xid_t xid,
                              oid_t oid,
-                             ptr<tx> txn,
+                             ptr<tx_rm> txn,
                              std::set<tuple_id_t> tuple_ids,
                              const predicate &pred
 ) {
-  for (const auto &kv: write_key_) {
+  for (const auto &kv : write_key_) {
     if (boost::icl::contains(pred.interval_, kv.first)) {
       tuple_ids.insert(kv.first);
     }
   }
   int blocking = 0;
-  for (tuple_id_t tuple_id: tuple_ids) {
+  for (tuple_id_t tuple_id : tuple_ids) {
     auto p = find_slot(tuple_id);
     if (p.second) {
       if (p.first->predicate_conflict(xid, oid, txn)) {

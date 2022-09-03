@@ -23,14 +23,18 @@ using boost::system::error_code;
 //----------------------------------------------------------------------
 
 class sock_server {
-public:
-  sock_server(const config &conf, net_service *service);
+ public:
+  sock_server(const config &conf, ptr<net_service> service);
+
   ~sock_server();
+
   bool start();
 
   void stop();
+
   void join();
-private:
+
+ private:
 
   void async_accept_connection();
 
@@ -43,12 +47,13 @@ private:
 
   std::unique_ptr<tcp::acceptor> acceptor_;
   std::unique_ptr<tcp::socket> socket_;
-  net_service *service_;
+  ptr<net_service> service_;
   std::mutex client_conn_mutex_;
   // client to server connections ...
   std::unordered_map<std::string, ptr<connection>> incomming_conn_;
   std::atomic_bool stopped_;
 
   config conf_;
+
   void async_accept_new_connection_done(ptr<connection>);
 };

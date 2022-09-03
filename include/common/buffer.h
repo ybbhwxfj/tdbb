@@ -22,12 +22,16 @@
 
 // valid buffer contains, [read_pos , write_pos),  write_pos <= size
 class byte_buffer {
-public:
+ public:
   byte_buffer()
-      : wpos_(0), rpos_(0) { data_.resize(MESSAGE_BUFFER_SIZE); }
+      : data_(MESSAGE_BUFFER_SIZE), wpos_(0), rpos_(0) {}
+
+  byte_buffer(const byte_buffer &buffer)
+      : data_(buffer.data_), wpos_(buffer.wpos_), rpos_(buffer.rpos_) {}
 
   explicit byte_buffer(size_t n)
-      : wpos_(0), rpos_(0) { data_.resize(n); }
+      : data_(n), wpos_(0), rpos_(0) {}
+
   ~byte_buffer() = default;
 
   size_t capacity() const {
@@ -132,7 +136,7 @@ public:
 
   uint64_t get_wpos() const { return wpos_; }
 
-private:
+ private:
   std::vector<int8_t> data_;
   uint64_t wpos_;
   mutable uint64_t rpos_;

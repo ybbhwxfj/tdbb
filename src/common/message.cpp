@@ -39,6 +39,7 @@ template<> enum_strings<message_type>::e2s_t enum_strings<message_type>::enum2st
     {CLIENT_TX_REQ, "CLIENT_TX_REQ"},
     {TX_TM_COMMIT, "TX_TM_COMMIT"},
     {TX_TM_ABORT, "TX_TM_ABORT"},
+    {TX_TM_END, "TX_TM_END"},
     {TX_RM_PREPARE, "TX_RM_PREPARE"},
     {TX_RM_ACK, "TX_RM_ACK"},
     {TX_TM_REQUEST, "TX_TM_REQUEST"},
@@ -51,6 +52,7 @@ template<> enum_strings<message_type>::e2s_t enum_strings<message_type>::enum2st
 
     {RM_ENABLE_VIOLATE, "RM_ENABLE_VIOLATE"},
     {TM_ENABLE_VIOLATE, "TM_ENABLE_VIOLATE"},
+    {DL_DEPENDENCY, "DL_DEPENDENCY"},
     {PANEL_INFO_RESP_TO_CCB, "PANEL_INFO_RESP_TO_CCB"},
     {CCB_MESSAGE_END, "CCB_MESSAGE_END"},
 

@@ -1,9 +1,12 @@
 #pragma once
 
+#include "common/utils.h"
 #include "common/block_exception.h"
 #include "common/buffer.h"
 #include "common/endian.h"
 #include "common/message.h"
+#include "common/define.h"
+#include "common/variable.h"
 #include "proto/hello.pb.h"
 #include "proto/raft.pb.h"
 #include <boost/functional/hash.hpp>
@@ -45,26 +48,44 @@ inline void find(uint64_t hash, std::vector<int8_t> buf) {
 }
 
 class msg_hdr {
-private:
+ private:
   uint16_buf_t magic1_;
   uint16_buf_t magic2_;
   uint16_buf_t type_;
   uint64_buf_t length_;
   uint64_buf_t hash_;
-
-public:
+#ifdef TEST_NETWORK_TIME
+  uint64_buf_t ms1_;
+  uint64_buf_t ms2_;
+#endif // TEST_NETWORK_TIME
+ public:
   msg_hdr() : magic1_(MSG_HDR_MAGIC_NUMBER1), magic2_(MSG_HDR_MAGIC_NUMBER2) {}
 
-  void set_type(message_type mt) { type_ = uint16_t(mt); }
+  void set_type(message_type mt) {
+    type_ = uint16_t(mt);
+#ifdef TEST_NETWORK_TIME
+    uint64_t millis = ms_since_epoch();
+    ms1_ = millis;
+#endif
+  }
 
   message_type type() const { return message_type(type_.value()); }
 
+#ifdef TEST_NETWORK_TIME
+  void set_millis1(uint64_t ms) { ms1_ = ms; }
+  void set_millis2(uint64_t ms) { ms2_ = ms; }
+  uint64_t millis1() const { return ms1_.value(); }
+
+  uint64_t millis2() const { return ms1_.value(); }
+#endif
   void set_length(uint64_t size) { length_ = size; }
+
   uint64_t length() const { return length_.value(); }
 
   void set_hash(uint64_t hash) {
     hash_ = hash;
   }
+
   uint64_t hash() const { return hash_.value(); }
 
   bool check_magic() {
@@ -72,10 +93,13 @@ public:
     uint16_t m2 = magic2_.value();
     return (m1 == MSG_HDR_MAGIC_NUMBER1 || m2 == MSG_HDR_MAGIC_NUMBER2);
   }
-};
-typedef std::function<void(msg_hdr &)> fn_msg_hdr;
 
-const uint32_t MSG_HDR_SIZE = sizeof(msg_hdr);
+  static size_t size() {
+    return sizeof(msg_hdr);
+  }
+};
+
+typedef std::function<void(msg_hdr &)> fn_msg_hdr;
 
 template<class PBMSG>
 result<void> pb_body_to_buf(byte_buffer &buffer,
@@ -100,25 +124,27 @@ result<void> pb_body_to_buf(byte_buffer &buffer,
 }
 
 template<class PBMSG>
-result<void> pb_msg_to_buf(byte_buffer &buffer, message_type id,
-                           PBMSG &msg,
-                           fn_msg_hdr fn = nullptr) {
+result<void> pb_msg_to_buf(
+    byte_buffer &buffer,
+    message_type id,
+    PBMSG &msg,
+    fn_msg_hdr fn = nullptr) {
 
   size_t body_size = msg.ByteSizeLong();
-  if (MESSAGE_BUFFER_SIZE < sizeof(msg_hdr) + body_size) {
-    buffer.resize(sizeof(msg_hdr) + body_size + buffer.get_wpos());
+  if (MESSAGE_BUFFER_SIZE < msg_hdr::size() + body_size) {
+    buffer.resize(msg_hdr::size() + body_size + buffer.get_wpos());
   }
 
-  if (buffer.get_wsize() < sizeof(msg_hdr)) {
+  if (buffer.get_wsize() < msg_hdr::size()) {
     // insufficient space for message header
     return outcome::failure(EC::EC_INSUFFICIENT_SPACE);
   }
 
-  if (buffer.get_wsize() < body_size + sizeof(msg_hdr)) {
+  if (buffer.get_wsize() < body_size + msg_hdr::size()) {
     return outcome::failure(EC::EC_INSUFFICIENT_SPACE);
   }
-  BOOST_ASSERT(buffer.size() >= body_size + sizeof(msg_hdr) + buffer.get_wpos());
-  bool ok = msg.SerializeToArray(buffer.wbegin() + sizeof(msg_hdr),
+  BOOST_ASSERT(buffer.size() >= body_size + msg_hdr::size() + buffer.get_wpos());
+  bool ok = msg.SerializeToArray(buffer.wbegin() + msg_hdr::size(),
                                  buffer.get_wsize());
   if (!ok) {
     return outcome::failure(EC::EC_INSUFFICIENT_SPACE);
@@ -129,15 +155,24 @@ result<void> pb_msg_to_buf(byte_buffer &buffer, message_type id,
   msg_hdr header;
   header.set_type(id);
   header.set_length(body_size);
+#ifdef CHECK_HASH
   uint64_t hash =
-      boost::hash_range(buffer.wbegin() + sizeof(msg_hdr),
-                        buffer.wbegin() + sizeof(msg_hdr) + body_size);
+      boost::hash_range(buffer.wbegin() + msg_hdr::size(),
+                        buffer.wbegin() + msg_hdr::size() + body_size);
   //BOOST_LOG_TRIVIAL(info) << "send message hash " << hash;
   header.set_hash(hash);
+#endif
   if (fn) {
     fn(header);
   }
-
+#ifdef TEST_NETWORK_TIME
+  auto current_ms= ms_since_epoch();
+  if (current_ms - header.millis1() > 10 && id == message_type::C2D_READ_DATA_REQ ){
+    // BOOST_LOG_TRIVIAL(info) << "CCB -> DSB, " << current_ms - header.millis1() << "ms";
+    // BOOST_LOG_TRIVIAL(info) << "CCB -> DSB, since start, " << current_ms - read_start_ << "ms";
+  }
+  header.set_millis1(current_ms);
+#endif
   result<void> write_header_result = buffer.write(&header, sizeof(header));
   if (!write_header_result) {
     buffer.set_wpos(wpos);
@@ -145,12 +180,13 @@ result<void> pb_msg_to_buf(byte_buffer &buffer, message_type id,
   }
   // set the buffer write position
 
-  buffer.set_wpos(wpos + sizeof(msg_hdr) + body_size);
+  buffer.set_wpos(wpos + msg_hdr::size() + body_size);
+
   return outcome::success();
 }
 
 inline result<msg_hdr> buf_to_hdr(byte_buffer &buffer) {
-  if (buffer.get_rsize() < sizeof(msg_hdr)) {
+  if (buffer.get_rsize() < msg_hdr::size()) {
     return outcome::failure(EC::EC_INSUFFICIENT_SPACE);
   }
   uint32_t rpos = buffer.get_rpos();
@@ -177,7 +213,8 @@ result<void> buf_to_pb(byte_buffer &buffer, PBMSG &msg) {
   return outcome::success();
 }
 
-template<class PBMSG> void to_pb(byte_buffer &buffer, PBMSG &msg) {
+template<class PBMSG>
+void to_pb(byte_buffer &buffer, PBMSG &msg) {
   bool ok = msg.ParseFromArray(buffer.rbegin(), buffer.get_rsize());
   if (!ok) {
     throw block_exception(EC::EC_INSUFFICIENT_SPACE);

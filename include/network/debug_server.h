@@ -1,4 +1,5 @@
 #pragma once
+
 #include "common/ptr.hpp"
 #include <boost/asio.hpp>
 #include <boost/beast/core.hpp>
@@ -20,8 +21,9 @@ using tcp = boost::asio::ip::tcp; // from <boost/asio/ip/tcp.hpp>
 
 
 typedef std::function<void(const std::string &path, std::ostream &body)> http_handler;
+
 class debug_server {
-private:
+ private:
   std::string address_;
   uint16_t port_;
   std::vector<ptr<boost::thread>> thd_;
@@ -32,15 +34,24 @@ private:
   http_handler handler_;
   std::recursive_mutex mutex_;
   std::map<tcp::socket *, ptr<tcp::socket>> socket_;
-public:
+ public:
   debug_server(std::string addr, uint16_t port, http_handler handler)
-      : address_(std::move(addr)), port_(port), handler_(std::move(handler)) {}
+      : address_(std::move(addr)), port_(port), handler_(std::move(handler)) {
+
+  }
+
   void start();
+
   void join();
+
   void stop();
-private:
+
+ private:
   void session(const ptr<tcp::socket> &sock);
+
   void async_accept();
+
   void handle_accept(ptr<tcp::socket> sock);
+
   void start_thd();
 };

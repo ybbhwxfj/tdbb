@@ -3,13 +3,14 @@ syntax = "proto3";
 import "tx_operation.proto";
 
 message tx_request {
-  uint64 xid = 1;
-  uint32 source = 2;
-  uint32 dest = 3;
-  bool oneshot = 4;
-  bool distributed = 5;
-  bool client_request = 6;
-  repeated tx_operation operations = 7;
+  uint32 terminal_id = 1;
+  uint64 xid = 2;
+  uint32 source = 3;
+  uint32 dest = 4;
+  bool oneshot = 5;
+  bool distributed = 6;
+  bool client_request = 7;
+  repeated tx_operation operations = 8;
 }
 
 message tx_response {
@@ -18,10 +19,14 @@ message tx_response {
   uint64 latency_append = 3;
   uint64 latency_replicate = 4;
   uint64 latency_read = 5;
-  uint64 latency_lock_wait = 6;
-  uint64 latency_part = 7;
-  uint64 access_part = 8;
-  repeated tx_operation operations = 9;
+  uint64 latency_read_dsb = 6;
+  uint64 latency_lock_wait = 7;
+  uint64 latency_part = 8;
+  uint64 access_part = 9;
+  uint32 num_read_violate = 10;
+  uint32 num_write_violate = 11;
+  uint32 num_lock = 12;
+  repeated tx_operation operations = 13;
 }
 
 
@@ -35,8 +40,12 @@ message tx_rm_prepare {
   uint64 latency_append = 7;
   uint64 latency_replicate = 8;
   uint64 latency_read = 9;
-  uint64 latency_lock_wait = 10;
-  uint64 latency_part = 11;
+  uint64 latency_read_dsb = 10;
+  uint64 latency_lock_wait = 11;
+  uint64 latency_part = 12;
+  uint32 num_read_violate = 13;
+  uint32 num_write_violate = 14;
+  uint32 num_lock = 15;
 }
 
 message tx_tm_commit {
@@ -62,4 +71,11 @@ message tx_rm_ack {
   uint32 source_rg = 4;
   uint32 dest_rg = 5;
   bool commit = 6;
+}
+
+
+message tx_tm_end {
+  uint64 xid = 1;
+  uint32 source_node = 2;
+  uint32 dest_node = 3;
 }

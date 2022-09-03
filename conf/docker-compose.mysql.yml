@@ -1,0 +1,48 @@
+version: '3.8'
+networks:
+  bdb-network:
+    attachable: true
+    driver: overlay
+    ipam:
+      config:
+        - gateway: 192.168.0.1
+          subnet: 192.168.0.0/16
+    name: bdb-network
+services:
+  mysql-client-az3:
+    build: ..
+    cap_add:
+      - NET_ADMIN
+    image: mysql-tpcc
+    networks:
+      bdb-network:
+        ipv4_address: 192.168.3.100
+    tty: true
+  mysql-az1:
+    build: ..
+    cap_add:
+      - NET_ADMIN
+    image: mysql-tpcc
+    networks:
+      bdb-network:
+        ipv4_address: 192.168.1.1
+    tty: true
+  mysql-az2:
+    build: ..
+    cap_add:
+      - NET_ADMIN
+    image: mysql-tpcc
+    networks:
+      bdb-network:
+        ipv4_address: 192.168.2.1
+    tty: true
+  mysql-az3:
+    build: ..
+    cap_add:
+      - NET_ADMIN
+    image: mysql-tpcc
+    networks:
+      bdb-network:
+        ipv4_address: 192.168.3.1
+    tty: true
+

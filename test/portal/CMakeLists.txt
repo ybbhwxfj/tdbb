@@ -27,9 +27,11 @@ target_link_libraries(${test_binary}
         ${Boost_TEST_EXEC_MONITOR_LIBRARY}
         ${Boost_LOG_LIBRARY}
         ${Boost_SERIALIZATION_LIBRARY}
-        ${Boost_FILESYSTEM_LIBRARY}
         ${Boost_SYSTEM_LIBRARY}
+        ${Boost_SYSTEM_LIBRARY}
+        ${Boost_FILESYSTEM_LIBRARY}
         ${Boost_THREAD_LIBRARY}
+        ${Boost_CHRONO}
         )
 add_test(NAME ${test_binary} COMMAND ${test_binary})
 

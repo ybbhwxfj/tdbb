@@ -2,15 +2,21 @@
 #include "common/json_pretty.h"
 #include <sstream>
 
+void wait_path::clear() {
+  ws_.clear();
+}
+
 void wait_path::tx_finish(xid_t xid) {
-  ws_.finish_.insert(std::make_pair(xid, 0));
+  ws_.finish_.insert(xid);
+  ws_.tx_wait_.erase(xid);
+  ws_.victim_.erase(xid);
 }
 
 void wait_path::tx_victim(xid_t xid) {
-  ws_.victim_.insert(std::make_pair(xid, 0));
+  ws_.victim_.insert(xid);
 }
 
-const std::unordered_map<xid_t, uint32_t> &wait_path::victim() const {
+const std::unordered_set<xid_t> &wait_path::victim() const {
   return ws_.victim_;
 }
 
@@ -25,10 +31,10 @@ void wait_path::merge_dependency_set(tx_wait_set &wait) {
 bool wait_path::detect_circle(fn_circle_found fn) {
   std::vector<xid_t> path;
   std::set<std::vector<xid_t>> circle;
-  for (auto kv: ws_.tx_wait_) {
+  for (auto kv : ws_.tx_wait_) {
     kv.second->flag_ = COLOR_WHITE;
   }
-  for (auto kv: ws_.tx_wait_) {
+  for (auto kv : ws_.tx_wait_) {
     BOOST_ASSERT(kv.first != 0);
     ptr<tx_wait> p = kv.second;
     if (p->flag_ == COLOR_WHITE) {
@@ -54,7 +60,7 @@ void wait_path::detect_circle(
 
   w->flag_ = COLOR_GRAY;
   path.push_back(w->xid_);
-  for (xid_t x: w->out_) {
+  for (xid_t x : w->out_) {
     BOOST_ASSERT(x != 0);
     auto iw = ws_.tx_wait_.find(x);
     if (iw == ws_.tx_wait_.end()) {

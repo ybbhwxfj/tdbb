@@ -1,0 +1,114 @@
+{
+  "node_server_list": [
+    {
+      "zone_name": "az1",
+      "shard_name": "s1",
+      "node_name": "node_s1_raz1",
+      "address": "47.113.195.47",
+      "private_address": "172.24.139.78",
+      "port": 700,
+      "block_type": [
+        "CCB"
+      ]
+    },
+    {
+      "zone_name": "az2",
+      "shard_name": "s1",
+      "node_name": "node_s1_raz2",
+      "address": "47.108.169.201",
+      "private_address": "172.24.195.70",
+      "port": 700,
+      "block_type": [
+        "CCB"
+      ]
+    },
+    {
+      "zone_name": "az3",
+      "shard_name": "s1",
+      "node_name": "node_s1_raz3",
+      "address": "8.142.102.48",
+      "private_address": "172.26.238.164",
+      "port": 700,
+      "block_type": [
+        "CCB"
+      ]
+    },
+    {
+      "zone_name": "az1",
+      "shard_name": "s1",
+      "node_name": "node_s1_raz1",
+      "address": "47.113.195.47",
+      "private_address": "172.24.139.78",
+      "port": 800,
+      "block_type": [
+        "RLB"
+      ]
+    },
+    {
+      "zone_name": "az2",
+      "shard_name": "s1",
+      "node_name": "node_s1_raz2",
+      "address": "47.108.169.201",
+      "private_address": "172.24.195.70",
+      "port": 800,
+      "block_type": [
+        "RLB"
+      ]
+    },
+    {
+      "zone_name": "az3",
+      "shard_name": "s1",
+      "node_name": "node_s1_raz3",
+      "address": "8.142.102.48",
+      "private_address": "172.26.238.164",
+      "port": 800,
+      "block_type": [
+        "RLB"
+      ]
+    },
+    {
+      "zone_name": "az1",
+      "shard_name": "s1",
+      "node_name": "node_s1_raz1",
+      "address": "47.113.195.47",
+      "private_address": "172.24.139.78",
+      "port": 900,
+      "block_type": [
+        "DSB"
+      ]
+    },
+    {
+      "zone_name": "az2",
+      "shard_name": "s1",
+      "node_name": "node_s1_raz2",
+      "address": "47.108.169.201",
+      "private_address": "172.24.195.70",
+      "port": 900,
+      "block_type": [
+        "DSB"
+      ]
+    },
+    {
+      "zone_name": "az3",
+      "shard_name": "s1",
+      "node_name": "node_s1_raz3",
+      "address": "8.142.102.48",
+      "private_address": "172.26.238.164",
+      "port": 900,
+      "block_type": [
+        "DSB"
+      ]
+    }
+  ],
+  "node_panel": {
+    "zone_name": "az3",
+    "shard_name": "",
+    "node_name": "panel",
+    "address": "121.89.238.5",
+    "private_address": "172.26.238.165",
+    "port": 700,
+    "block_type": [
+      "PNB"
+    ]
+  }
+}

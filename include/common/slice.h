@@ -1,7 +1,7 @@
 #pragma once
 
 class slice {
-public:
+ public:
   // Create an empty slice.
   slice() : data_(""), size_(0) {}
 
