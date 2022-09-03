@@ -1,4 +1,5 @@
 #pragma once
+
 #include "common/error_code.h"
 #include <system_error>
 #include <boost/assert.hpp>
@@ -15,28 +16,32 @@ inline std::string ec2string(EC ec) {
 namespace std {
 // Tell the C++ 11 STL metaprogramming that enum ec
 // is registered with the standard error code system
-template<> struct is_error_code_enum<EC> : true_type {};
+template<>
+struct is_error_code_enum<EC> : true_type {
+};
 
 namespace detail {
 // Define a custom error code category derived from std::error_category
 class ec_category : public std::error_category {
-public:
+ public:
   // Return a short descriptive name for the category
   virtual const char *name() const noexcept override final {
     return "ConversionError";
   }
+
   // Return what each enum means in text
   virtual std::string message(int c) const override final {
     return ec2string(EC(c));
   }
+
   // OPTIONAL: Allow generic error conditions to be compared to me
   virtual std::error_condition
   default_error_condition(int c) const noexcept override final {
     switch (static_cast<EC>(c)) {
-    case EC::EC_NETWORK_ERROR:return make_error_condition(std::errc::invalid_argument);
-    default:
-      // I have no mapping for this code
-      return std::error_condition(c, *this);
+      case EC::EC_NETWORK_ERROR:return make_error_condition(std::errc::invalid_argument);
+      default:
+        // I have no mapping for this code
+        return std::error_condition(c, *this);
     }
   }
 };
@@ -67,13 +72,14 @@ inline std::error_code make_error_code(EC e) {
 }
 
 class berror : public std::error_code {
-public:
+ public:
   explicit berror() : std::error_code() {}
 
   explicit berror(EC ec)
       : std::error_code(ec, ec_category()) {
 
   };
+
   explicit berror(boost::system::error_code bec) :
       std::error_code(bec.value(), bec.category()) {
 

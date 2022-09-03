@@ -1,6 +1,9 @@
 #pragma once
+
 #include "common/db_type.h"
+
 #ifdef DB_TYPE_CALVIN
+
 #include "common/enum_str.h"
 #include "common/ptr.hpp"
 #include "network/net_service.h"
@@ -19,9 +22,10 @@ enum epoch_state {
 template<> enum_strings<epoch_state>::e2s_t enum_strings<epoch_state>::enum2str;
 
 class calvin_sequencer {
-private:
+ private:
   struct local_epoch_ctx {
     local_epoch_ctx() : epoch_(0) {}
+
     uint64_t epoch_;
     std::set<shard_id_t> ack_;
   };
@@ -40,19 +44,29 @@ private:
   std::string trace_message_;
   bool is_lead_;
   bool handle_tx_;
-public:
+  boost::asio::io_context::strand timer_strand_;
+ public:
   calvin_sequencer(config conf, net_service *service, fn_scheduler fn);
+
   void tick();
+
   void epoch_broadcast_request();
+
   void handle_tx_request(const tx_request &tx);
+
   void handle_epoch(const calvin_epoch &msg);
+
   void handle_epoch_ack(const calvin_epoch_ack &msg);
 
   void update_shard_lead(shard_id_t shard_id, node_id_t node_id);
+
   void update_local_lead_state(bool leader);
+
   void debug_tx(std::ostream &os);
-private:
+
+ private:
   void reorder_request(const ptr<calvin_epoch_ops> &ctx);
+
   void schedule(const ptr<calvin_epoch_ops> &ops);
 };
 

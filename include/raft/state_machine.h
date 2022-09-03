@@ -2,9 +2,11 @@
 
 #include "common/config.h"
 #include "common/callback.h"
+#include "common/define.h"
 #include "common/message.h"
 #include "common/enum_str.h"
 #include "common/ptr.hpp"
+#include "common/ctx_strand.h"
 #include "network/net_service.h"
 #include "network/sender.h"
 #include "proto/proto.h"
@@ -37,16 +39,19 @@ struct sm_status {
   uint32_t lead_node;
 };
 
-class state_machine {
+class state_machine : public ctx_strand, public std::enable_shared_from_this<state_machine> {
   friend class raft_node;
+
   friend class raft_test_context;
-private:
+
+ private:
   struct progress {
     progress() :
         node_id_(0),
         match_index_(0),
         next_index_(1),
         append_log_num_(MAX_RAFT_LOG_ENTRIES) {}
+
     node_id_t node_id_;
     log_index_t match_index_;
     log_index_t next_index_;
@@ -56,6 +61,7 @@ private:
   typedef std::unordered_set<uint32_t> node_set;
   typedef std::unordered_map<uint32_t, std::vector<uint32_t>> voter_logs;
   typedef std::unordered_map<uint32_t, progress> progress_tracer;
+
   config conf_;
   node_id_t node_id_;
   std::string node_name_;
@@ -83,7 +89,7 @@ private:
 
   ptr<log_entry> null_log_entry_;
 
-  net_service *sender_;
+  ptr<net_service> sender_;
   ptr<boost::asio::steady_timer> timer_tick_;
 
   std::random_device rnd_dev_;
@@ -104,27 +110,31 @@ private:
   std::unordered_map<uint32_t, ptr<client>> clients_;
   std::atomic<bool> stopped_;
   std::deque<tx_log> tx_logs_;
-  boost::posix_time::ptime start_;
-public:
-  explicit state_machine(const config &conf,
-                net_service *sender,
-                fn_on_become_leader fn_on_become_leader,
-                fn_on_become_follower fn_on_become_follower,
+  std::chrono::steady_clock::time_point start_;
+ public:
+  explicit state_machine(
+      const config &conf,
+      ptr<net_service> sender,
+      fn_on_become_leader fn_on_become_leader,
+      fn_on_become_follower fn_on_become_follower,
 
-                fn_commit_entries fn_commit,
-                ptr<log_service> ls
+      fn_commit_entries fn_commit,
+      ptr<log_service> ls
   );
 
-  const boost::posix_time::ptime & start_time() const {
+  const std::chrono::steady_clock::time_point &start_time() const {
     return start_;
   }
+
   result<void> ccb_append_log(const ccb_append_log_request &msg);
 
-  result<void> append_entry(const ptr<log_entry> &entry);
+  result<void> append_entry(ptr<log_entry> entry);
 
   void on_start();
 
   void on_stop();
+
+  // only inovoked by raft test
   void on_recv_message(message_type id, byte_buffer &buffer);
 
   sm_status status();
@@ -141,7 +151,7 @@ public:
 
   void handle_append_entries_response(const append_entries_response &response);
 
-  void handle_transfer_leader(const transfer_leader &msg);
+  void handle_transfer_leader(const ptr<transfer_leader> msg);
 
   void handle_transfer_notify(const transfer_notify &msg);
 
@@ -153,15 +163,21 @@ public:
     return index - consistent_log_index - 1;
   }
 
-private:
+ private:
   uint64_t retrieve_log(uint64_t index, uint64_t size);
+
   void append_entries(progress &tracer);
+
   result<void> send_append_log();
 
   void tick();
+
   void pre_start();
+
   uint64_t last_log_index();
+
   uint64_t last_log_term();
+
   void on_tick_timeout();
 
   void timeout_request_vote();
@@ -188,6 +204,7 @@ private:
   void update_term(uint64_t term);
 
   log_index_t offset_to_log_index(uint64_t offset);
+
   uint64_t log_index_to_offset(log_index_t index);
 
   void update_consistency_index(uint64_t consistency_index);
@@ -195,29 +212,13 @@ private:
   void update_commit_index(uint64_t commit_index);
 
   template<typename MESSAGE>
-  result<void> async_send(const ptr<client> &c, message_type mt, MESSAGE &msg) {
-    auto r = c->async_send(mt, msg);
-    if (!r) {
-      if (r.error().code() == EC::EC_NET_UNCONNECTED) {
-        sender_->async_client_connect(c);
-      }
-    }
-    return r;
-  }
-
-  template<typename MESSAGE>
-  result<void> async_send(node_id_t to_node_id, message_type mt, MESSAGE &msg) {
+  result<void> async_send(node_id_t to_node_id, message_type mt, ptr<MESSAGE> msg) {
     auto i = clients_.find(to_node_id);
     if (i == clients_.end()) {
       return outcome::failure(EC::EC_NET_CANNOT_FIND_CONNECTION);
     }
-    auto r = i->second->async_send(mt, msg);
-    if (!r) {
-      if (r.error().code() == EC::EC_NET_UNCONNECTED) {
-        sender_->async_client_connect(i->second);
-      }
-    }
-    return r;
+    sender_->template conn_async_send(i->second, mt, msg);
+    return outcome::success();
   }
 
   void check_log_index();

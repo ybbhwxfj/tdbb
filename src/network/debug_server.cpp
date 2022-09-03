@@ -193,7 +193,8 @@ void fail(beast::error_code ec, char const *what) {
 
 // This is the C++11 equivalent of a generic lambda.
 // The function object is used to send an HTTP message.
-template<class Stream> struct send_lambda {
+template<class Stream>
+struct send_lambda {
   Stream &stream_;
   bool &close_;
   beast::error_code &ec_;
@@ -230,14 +231,16 @@ void do_session(const http_handler &handler,
   for (;;) {
     // Read a request
     http::request<http::string_body> req;
-    http::read(*socket, buffer, req, ec);
+    boost::beast::http::parser<true, http::dynamic_body> preq(std::move(req));
+    preq.body_limit(UINT64_MAX);
+    http::read(*socket, buffer, preq, ec);
     if (ec == http::error::end_of_stream)
       break;
     if (ec)
       return fail(ec, "read");
 
     // Send the response
-    handle_request(handler, std::move(req), lambda);
+    handle_request(handler, std::move(preq.get()), lambda);
     if (ec)
       return fail(ec, "write");
     if (close) {
@@ -255,7 +258,7 @@ void do_session(const http_handler &handler,
 //------------------------------------------------------------------------------
 void debug_server::start_thd() {
   ctx_->run();
-  BOOST_LOG_TRIVIAL(info) << " debug server stopped";
+  BOOST_LOG_TRIVIAL(info) << "debug server stopped";
 }
 
 void debug_server::async_accept() {
@@ -268,7 +271,9 @@ void debug_server::async_accept() {
       // Launch the session, transferring ownership of the socket
       handle_accept(socket);
     } else {
-      BOOST_LOG_TRIVIAL(error) << "accept error " << ec;
+      if (not ctx_->stopped()) {
+        BOOST_LOG_TRIVIAL(error) << "accept error , " << ec.message();
+      }
     }
   });
 }
@@ -278,7 +283,7 @@ void debug_server::handle_accept(ptr<tcp::socket> sock) {
   socket_.insert(std::make_pair(sock.get(), sock));
   // Launch the session, transferring ownership of the socket
   thd_.emplace_back(std::make_shared<boost::thread>(
-      std::bind(&debug_server::session, this, std::move(sock))));
+      [this, capture0 = std::move(sock)] { session(capture0); }));
   async_accept();
 }
 
@@ -290,6 +295,7 @@ void debug_server::session(const ptr<tcp::socket> &sock) {
 
 void debug_server::start() {
   // The io_context is required for all I/O
+  // ::body_limit(UINT64_MAX);
   ctx_ = std::make_shared<net::io_context>(1);
   work_.push_back(boost::asio::make_work_guard(*ctx_));
 
@@ -302,7 +308,7 @@ void debug_server::start() {
   // The acceptor receives incoming connections
 
   thd_.emplace_back(std::make_shared<boost::thread>(
-      boost::bind(&debug_server::start_thd, this)));
+      [this] { start_thd(); }));
   async_accept();
 }
 
@@ -315,13 +321,13 @@ void debug_server::stop() {
   }
   {
     std::scoped_lock l(mutex_);
-    for (auto &s: socket_) {
+    for (auto &s : socket_) {
       s.second->close();
     }
   }
 }
 void debug_server::join() {
-  for (const auto &t: thd_) {
+  for (const auto &t : thd_) {
     t->join();
   }
 }

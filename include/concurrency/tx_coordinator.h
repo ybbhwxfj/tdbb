@@ -1,7 +1,7 @@
 #pragma once
 
 #include "common/db_type.h"
-
+#include "concurrency/tx.h"
 #ifdef DB_TYPE_NON_DETERMINISTIC
 #ifdef DB_TYPE_SHARE_NOTHING
 
@@ -38,8 +38,8 @@ enum_strings<tm_state>::e2s_t  enum_strings<tm_state>::enum2str;
 template<>
 enum_strings<tm_trace_state>::e2s_t enum_strings<tm_trace_state>::enum2str;
 
-class tx_coordinator : public std::enable_shared_from_this<tx_coordinator> {
-private:
+class tx_coordinator : public std::enable_shared_from_this<tx_coordinator>, public tx_base {
+ private:
   enum tx_rm_state {
     RM_IDLE,
     RM_PREPARE_COMMIT,
@@ -56,6 +56,7 @@ private:
       violate_ = false;
 #endif // DB_TYPE_GEO_REP_OPTIMIZE
     }
+
     node_id_t lead_;
     tx_rm_state rm_state_;
 #ifdef DB_TYPE_GEO_REP_OPTIMIZE
@@ -82,54 +83,80 @@ private:
   EC error_code_;
   bool victim_;
   std::string trace_message_;
-  boost::posix_time::ptime start_;
+  std::chrono::steady_clock::time_point start_;
   bool responsed_;
   fn_tm_state fn_tm_state_;
 
   uint64_t latency_read_;
+  uint64_t latency_read_dsb_;
   uint64_t latency_replicate_;
   uint64_t latency_append_;
   uint64_t latency_lock_wait_;
   uint64_t latency_part_;
-public:
-  tx_coordinator(uint64_t xid, uint32_t node_id,
-                 std::unordered_map<shard_id_t, node_id_t> lead_node,
-                 net_service *service, ptr<connection> connection, write_ahead_log *write_ahead_log,
-                 fn_tm_state fn
+  uint32_t num_lock_;
+  uint32_t num_read_violate_;
+  uint32_t num_write_violate_;
+ public:
+  tx_coordinator(
+      boost::asio::io_context::strand s,
+      uint64_t xid, uint32_t node_id,
+      std::unordered_map<shard_id_t, node_id_t> lead_node,
+      net_service *service, ptr<connection> connection, write_ahead_log *write_ahead_log,
+      fn_tm_state fn
   );
 
   uint64_t xid() const { return xid_; }
 
   result<void> handle_tx_request(const tx_request &req);
+
   void handle_tx_rm_prepare(const tx_rm_prepare &msg);
+
   void handle_tx_rm_ack(const tx_rm_ack &msg);
 
   tm_state state() const { return tm_state_; }
 
+  void debug_tx(std::ostream &os);
+
   const std::string &trace_message() const { return trace_message_; }
+
   void timeout_clean_up();
+
   void abort(EC ec);
+
   void on_log_entry_commit(tx_cmd_type type);
+
 #ifdef DB_TYPE_GEO_REP_OPTIMIZE
+
   void handle_tx_enable_violate(const tx_enable_violate &msg);
+
 #endif // DB_TYPE_GEO_REP_OPTIMIZE
-private:
+ private:
   void send_commit();
+
   void send_abort();
+
+  void send_end();
+
   void step_tm_state_advance();
 
   void write_commit_log();
+
   void write_abort_log();
+
   void write_end_log();
 
   void on_committed();
+
   void on_aborted();
+
   void on_ended();
 
   void send_tx_response();
 
 #ifdef DB_TYPE_GEO_REP_OPTIMIZE
+
   void send_tx_enable_violate();
+
 #endif // DB_TYPE_GEO_REP_OPTIMIZE
 };
 

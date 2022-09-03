@@ -1,7 +1,9 @@
 #pragma once
 
 #include "common/db_type.h"
+
 #ifdef DB_TYPE_CALVIN
+
 #include "proto/proto.h"
 #include "common/id.h"
 #include "common/ptr.hpp"
@@ -19,13 +21,15 @@
 typedef std::function<void(EC)> fn_lock_callback;
 
 class calvin_context;
+
 class calvin_scheduler;
+
 typedef std::function<ptr<calvin_context>(const tx_request &)> fn_calvin_context_find;
 typedef std::function<void(xid_t)> fn_calvin_context_remove;
 
-class calvin_context : std::enable_shared_from_this<calvin_context>, public tx {
+class calvin_context : public tx_rm, public std::enable_shared_from_this<calvin_context> {
   friend calvin_scheduler;
-private:
+ private:
   xid_t xid_;
   node_id_t node_id_;
   node_id_t dsb_node_id_;
@@ -44,21 +48,30 @@ private:
   std::recursive_mutex mutex_;
   std::string trace_message_;
   fn_calvin_context_remove fn_remove_;
-public:
+  bool read_only_;
+ public:
 
-  calvin_context(xid_t xid,
-                 node_id_t node_id,
-                 node_id_t dsb_node_id,
-                 uint64_t cno,
-                 ptr<tx_request> ops,
-                 net_service *service,
-                 access_mgr *access,
-                 fn_calvin_context_remove fn_remove);
+  calvin_context(
+      boost::asio::io_context::strand s,
+      xid_t xid,
+      node_id_t node_id,
+      node_id_t dsb_node_id,
+      uint64_t cno,
+      ptr<tx_request> ops,
+      net_service *service,
+      access_mgr *access,
+      fn_calvin_context_remove fn_remove);
+
   virtual ~calvin_context() {}
-  xid_t xid() { return tx::xid(); }
-  void lock_acquire(EC ec, oid_t oid) override;
+
+  void set_read_only() { read_only_ = true; }
+
+  void async_lock_acquire(EC ec, oid_t oid) override;
+
   void set_epoch_num_ops(ptr<std::atomic_ulong> p) { num_ops_ = p; }
+
   bool on_operation_done(const tx_operation &op, const tuple &tp);
+
   bool on_operation_committed(const tx_log &op);
 
   bool tx_commit();
@@ -66,8 +79,10 @@ public:
   void add_lock_acquire_callback(oid_t oid, fn_lock_callback fn);
 
   void debug_tx(std::ostream &os) const;
+
   void read_response(const dsb_read_response &res);
-private:
+
+ private:
   void send_read(const tx_operation &op);
 };
 

@@ -15,12 +15,13 @@ enum_strings<raft_state>::e2s_t enum_strings<raft_state>::enum2str = {
 };
 
 state_machine::state_machine(
-    const config &conf, net_service *sender,
+    const config &conf, ptr<net_service> sender,
     fn_on_become_leader fn_on_become_leader,
     fn_on_become_follower fn_on_become_follower,
     fn_commit_entries fn_commit,
     ptr<log_service> log_service)
-    : conf_(conf),
+    : ctx_strand(boost::asio::io_context::strand(sender->get_service(SERVICE_ASYNC_CONTEXT))),
+      conf_(conf),
       node_id_(conf.this_node_config().node_id()),
       node_name_(id_2_name(conf.node_id())),
       tick_sequence_(0),
@@ -46,19 +47,23 @@ state_machine::state_machine(
       stopped_(false) {
   BOOST_ASSERT(node_id_ != 0);
   az_rtt_ms_ = az_rtt_ms_ == 0 ? 100 : az_rtt_ms_;
-  start_ = boost::posix_time::microsec_clock::local_time();
+  start_ = std::chrono::steady_clock::now();
 }
 
 void state_machine::on_start() {
+#ifdef MULTI_THREAD_EXECUTOR
   std::scoped_lock l(mutex_);
+#endif
   pre_start();
   BOOST_LOG_TRIVIAL(info) << "state machine start, term :" << current_term_;
   tick();
 }
 
 void state_machine::on_stop() {
+#ifdef MULTI_THREAD_EXECUTOR
   std::scoped_lock l(mutex_);
-  BOOST_LOG_TRIVIAL(info) << "state machine stop";
+#endif
+  BOOST_LOG_TRIVIAL(info) << "state machine cancel_and_join";
   stopped_.store(true);
 }
 
@@ -83,8 +88,9 @@ void state_machine::tick() {
     BOOST_LOG_TRIVIAL(info) << "state machine stopped";
     return;
   }
-
+#ifdef MULTI_THREAD_EXECUTOR
   std::scoped_lock l(mutex_);
+#endif
   uint32_t ms;
   if (state_ == RAFT_STATE_LEADER) {
     ms = tick_miliseconds_;
@@ -96,7 +102,7 @@ void state_machine::tick() {
     }
   }
   timer_tick_.reset(new boost::asio::steady_timer(
-      sender_->get_service(SERVICE_RAFT),
+      sender_->get_service(SERVICE_ASYNC_CONTEXT),
       boost::asio::chrono::milliseconds(ms)));
   auto fn_timeout = [this](const boost::system::error_code &error) {
     if (not error.failed()) {
@@ -105,19 +111,23 @@ void state_machine::tick() {
       BOOST_LOG_TRIVIAL(error) << " async wait error " << error.message();
     }
   };
-  timer_tick_->async_wait(fn_timeout);
+  timer_tick_->async_wait(
+      boost::asio::bind_executor(
+          get_strand(),
+          fn_timeout));
 }
 
 void state_machine::pre_start() {
   std::vector<node_id_t> rep_node_id = conf_.get_rg_block_nodes(conf_.rg_id(), BLOCK_TYPE_ID_RLB);
 
-  for (node_id_t node_id: rep_node_id) {
+  for (node_id_t node_id : rep_node_id) {
     nodes_ids_.push_back(node_id);
     BOOST_ASSERT(TO_RG_ID(node_id) == TO_RG_ID(node_id_));
     BOOST_ASSERT(is_rlb_block(node_id));
     auto c = conf_.get_node_conf(node_id);
     priority_.insert(std::make_pair(c.priority(), node_id));
-    ptr<client> cli(new client(c));
+    boost::asio::io_context::strand s(sender_->get_service(SERVICE_ASYNC_CONTEXT));
+    ptr<client> cli(new client(s, c));
     clients_.insert(std::make_pair(node_id, cli));
   }
   if (priority_.size() > 1) {
@@ -125,7 +135,7 @@ void state_machine::pre_start() {
   } else {
     priority_replica_node_ = 0;
   }
-  for (std::pair<uint32_t, ptr<client>> pair: clients_) {
+  for (std::pair<uint32_t, ptr<client>> pair : clients_) {
     sender_->async_client_connect(pair.second);
   }
   tick_count_ = 0;
@@ -202,7 +212,7 @@ void state_machine::pre_start() {
     has_voted_for_ = voted_for_ != 0;
   }
 
-  for (auto &entrie: entries) {
+  for (auto &entrie : entries) {
     if (entrie.first > consistent_log_index_) {
       log_.push_back(entrie.second);
       check_log_index();
@@ -212,16 +222,11 @@ void state_machine::pre_start() {
   uint32_t next_index = offset_to_log_index(log_.size());
   progress_[node_id_].match_index_ = next_index - 1;
   progress_[node_id_].next_index_ = next_index;
-  // prev_heart_beat_ = boost::posix_time::microsec_clock::local_time();
 }
 void state_machine::on_tick_timeout() {
+#ifdef MULTI_THREAD_EXECUTOR
   std::scoped_lock l(mutex_);
-  // boost::posix_time::ptime now = boost::posix_time::microsec_clock::local_time();
-  // auto us = (now - start_).total_microseconds();
-  // BOOST_LOG_TRIVIAL(trace) << "tick " << us << "us";
-  // if (now - prev_heart_beat_ >
-  // boost::posix_time::milliseconds//(tick_miliseconds_ * tick_num)) {
-
+#endif
   tick_count_++;
   if (state_ == RAFT_STATE_LEADER) {
     auto _ = send_append_log();
@@ -279,45 +284,42 @@ void state_machine::request_vote() {
   if (state_ != RAFT_STATE_CANDIDATE) {
     return;
   }
-  for (auto id: nodes_ids_) {
+  for (auto id : nodes_ids_) {
     if (votes_responded_.find(id) == votes_responded_.end()) { // not response
-      request_vote_request req;
-      req.set_dest(id);
-      req.set_source(node_id_);
-      req.set_term(current_term_);
-      req.set_last_log_index(last_log_index());
-      req.set_last_log_term(last_log_term());
+      auto req = std::make_shared<request_vote_request>();
+      req->set_dest(id);
+      req->set_source(node_id_);
+      req->set_term(current_term_);
+      req->set_last_log_index(last_log_index());
+      req->set_last_log_term(last_log_term());
 
-      auto i = clients_.find(id);
-      if (i == clients_.end()) {
-        BOOST_ASSERT_MSG(false, "invalid node id");
-        return;
-      }
-
-      result<void> send_result = async_send(i->second, RAFT_REQ_VOTE_REQ, req);
+      result<void> send_result = async_send(id, RAFT_REQ_VOTE_REQ, req);
       if (!send_result) {
         BOOST_LOG_TRIVIAL(error) << "send message to " <<
-                                 id_2_name(i->first) << " raft request vote error, " << send_result.error().message();
+                                 id_2_name(id) << " raft request vote error, " << send_result.error().message();
       }
     }
   }
 }
 
 result<void> state_machine::ccb_append_log(const ccb_append_log_request &msg) {
+#ifdef MULTI_THREAD_EXECUTOR
   std::scoped_lock l(mutex_);
+#endif
   auto &mutable_msg = const_cast<ccb_append_log_request &>(msg);
-  boost::posix_time::ptime now = boost::posix_time::microsec_clock::local_time();
-  uint64_t us = (now - start_).total_microseconds();
+  auto now = std::chrono::steady_clock::now();
 
-  for (tx_log &log: *mutable_msg.mutable_logs()) {
+  uint64_t ms = to_microseconds(now - start_);
+
+  for (tx_log &log : *mutable_msg.mutable_logs()) {
     tx_logs_.emplace_back();
     tx_logs_.rbegin()->Swap(&log);
-    tx_logs_.rbegin()->set_repl_latency(us);
-    BOOST_LOG_TRIVIAL(trace) << node_name_ << "state machine ccb_append_log tx log " << log.xid();
+    tx_logs_.rbegin()->set_repl_latency(ms);
+    BOOST_LOG_TRIVIAL(trace) << node_name_ << "state machine ccb_append_log tx_rm log " << log.xid();
   }
   //return send_append_log();
 
-  if (tx_logs_.size() > APPEND_LOG_ENTRIES_BATCH_MIN) {
+  if (tx_logs_.size() >= conf_.get_block_config().append_log_entries_batch_min()) {
     return send_append_log();
   } else {
     return outcome::success();
@@ -325,18 +327,24 @@ result<void> state_machine::ccb_append_log(const ccb_append_log_request &msg) {
 }
 
 result<void> state_machine::send_append_log() {
+#ifdef MULTI_THREAD_EXECUTOR
   std::scoped_lock l(mutex_);
+#endif
   if (tx_logs_.empty()) {
     return outcome::success();
   }
 
-
+  size_t n = 0;
   ptr<log_entry> entry(new log_entry());
   for (; not tx_logs_.empty();) {
     tx_log *log = entry->add_xlog();
     log->Swap(&tx_logs_.front());
-
     tx_logs_.pop_front();
+    n++;
+    if (n > APPEND_LOG_ENTRIES_BATCH_MAX) {
+      BOOST_LOG_TRIVIAL(info) << "raft append log size: " << tx_logs_.size();
+      break;
+    }
   }
   auto r = append_entry(entry);
   if (not r) {
@@ -351,8 +359,10 @@ result<void> state_machine::send_append_log() {
   return r;
 }
 
-result<void> state_machine::append_entry(const ptr<log_entry> &entries) {
+result<void> state_machine::append_entry(ptr<log_entry> entries) {
+#ifdef MULTI_THREAD_EXECUTOR
   std::scoped_lock l(mutex_);
+#endif
   if (state_ != RAFT_STATE_LEADER) {
     BOOST_LOG_TRIVIAL(error) << node_name_ << " only leader can append";
     return outcome::failure(EC::EC_NOT_LEADER);
@@ -390,7 +400,7 @@ result<void> state_machine::append_entry(const ptr<log_entry> &entries) {
 
   // BOOST_LOG_TRIVIAL(debug) << "node " << node_name_ << " append entry";
 
-  for (auto &progress: progress_) {
+  for (auto &progress : progress_) {
     if (progress.first != node_id_) {
       append_entries(progress.second);
     }
@@ -418,41 +428,35 @@ void state_machine::append_entries(progress &tracer) {
     }
   }
 
-  boost::posix_time::ptime now = boost::posix_time::microsec_clock::local_time();
-  uint64_t us = (now - start_).total_microseconds();
-  append_entries_request ae;
-  ae.set_source(node_id_);
-  ae.set_dest(id);
-  ae.set_term(current_term_);
-  ae.set_prev_log_index(prev_log_index);
-  ae.set_prev_log_term(prev_log_term);
-  ae.set_commit_index(commit_index_);
-  ae.set_consistency_index(consistent_log_index_);
-  ae.set_tick_sequence(us);
+  auto now = std::chrono::steady_clock::now();
+  uint64_t ms = to_milliseconds(now - start_);
+  auto ae = std::make_shared<append_entries_request>();
+  ae->set_source(node_id_);
+  ae->set_dest(id);
+  ae->set_term(current_term_);
+  ae->set_prev_log_index(prev_log_index);
+  ae->set_prev_log_term(prev_log_term);
+  ae->set_commit_index(commit_index_);
+  ae->set_consistency_index(consistent_log_index_);
+  ae->set_tick_sequence(ms);
   uint64_t size = log_.size();
   BOOST_ASSERT(size <= log_.size());
   for (uint64_t i = 0, off = start_offset;
        off < size && i < tracer.append_log_num_; off++, i++) {
-    log_entry *p = ae.add_entries();
+    log_entry *p = ae->add_entries();
     *p = *log_[off];
     BOOST_ASSERT(log_[off]->index() == prev_log_index + 1 + i);
   }
-  if (ae.entries_size() > 0) {
-    boost::posix_time::ptime pt = boost::posix_time::microsec_clock::local_time();
-    uint64_t ms = (pt - start_).total_microseconds();
-    BOOST_LOG_TRIVIAL(trace) << node_name_ << " " << ms << "us send append to " << id_2_name(id) << " next index: "
-                             << next_index <<
-                             " [" << start_offset << ":" << start_offset + ae.entries_size() << "]";
-    ae.set_heart_beat(ae.entries_size() == 0);
+  if (ae->entries_size() > 0) {
+    // auto now = std::chrono::steady_clock::now();
+    // uint64_t ms = to_milliseconds(now - start_);
+    //BOOST_LOG_TRIVIAL(info) << node_name_ << " " << ms << "ms send append to " << id_2_name(id) << " next index: "
+    //                         << next_index <<
+    //                         " [" << start_offset << ":" << start_offset + ae->entries_size() << "]";
+    ae->set_heart_beat(ae->entries_size() == 0);
   }
 
-  auto i = clients_.find(id);
-  if (i == clients_.end()) {
-    BOOST_LOG_TRIVIAL(error) << "state machine cannot find node " << id;
-    BOOST_ASSERT_MSG(false, "invalid node id");
-    return;
-  }
-  auto r = async_send(i->second, RAFT_APPEND_ENTRIES_REQ, ae);
+  auto r = async_send(id, RAFT_APPEND_ENTRIES_REQ, ae);
   if (!r) {
     if (r.error().code() == EC_MESSAGE_SIZE_TOO_LARGE) {
       if (tracer.append_log_num_ > 2) {
@@ -477,7 +481,7 @@ void state_machine::become_leader() {
 
   state_ = RAFT_STATE_LEADER;
   leader_id_ = node_id_;
-  for (auto id: nodes_ids_) {
+  for (auto id : nodes_ids_) {
     progress *p = nullptr;
     auto i = progress_.find(id);
     if (i == progress_.end()) {
@@ -531,7 +535,7 @@ void state_machine::leader_advance_commit_index() {
   for (int i = log_.size() - 1; i >= 0; i--) {
     log_index_t log_index = offset_to_log_index(i);
     size_t n = 0;
-    for (auto id: nodes_ids_) {
+    for (auto id : nodes_ids_) {
       if (progress_[id].match_index_ >= log_index) {
         n++;
       }
@@ -557,7 +561,7 @@ void state_machine::leader_advance_consistency_index() {
   for (int i = log_.size() - 1; i >= 0; i--) {
     log_index_t log_index = offset_to_log_index(i);
     size_t n = 0;
-    for (auto id: nodes_ids_) {
+    for (auto id : nodes_ids_) {
       if (progress_[id].match_index_ >= log_index) {
         n++;
       }
@@ -579,7 +583,9 @@ void state_machine::leader_advance_consistency_index() {
 
 void state_machine::handle_request_vote_request(
     const request_vote_request &request) {
+#ifdef MULTI_THREAD_EXECUTOR
   std::scoped_lock l(mutex_);
+#endif
   update_term(request.term());
 
   uint32_t src_node_id = request.source();
@@ -598,25 +604,19 @@ void state_machine::handle_request_vote_request(
                            << " request term " << request.term() << " granted "
                            << granted;
 
-  request_vote_response response;
+  auto response = std::make_shared<request_vote_response>();
   if (granted) {
     has_voted_for_ = true;
     voted_for_ = src_node_id;
   }
 
-  response.set_source(node_id_);
-  response.set_dest(src_node_id);
-  response.set_term(current_term_);
-  response.set_vote_granted(granted);
-
-  auto i = clients_.find(src_node_id);
-  if (i == clients_.end()) {
-    BOOST_ASSERT_MSG(false, "invalid node id");
-    return;
-  }
+  response->set_source(node_id_);
+  response->set_dest(src_node_id);
+  response->set_term(current_term_);
+  response->set_vote_granted(granted);
 
   result<void> send_result =
-      async_send(i->second, RAFT_REQ_VOTE_RESP, response);
+      async_send(src_node_id, RAFT_REQ_VOTE_RESP, response);
   if (not send_result) {
     BOOST_LOG_TRIVIAL(error)
       << "send message raft request_vote_response error";
@@ -625,7 +625,9 @@ void state_machine::handle_request_vote_request(
 
 void state_machine::handle_request_vote_response(
     const request_vote_response &response) {
+#ifdef MULTI_THREAD_EXECUTOR
   std::scoped_lock l(mutex_);
+#endif
   update_term(response.term());
   if (response.term() != current_term_) {
     return;
@@ -653,28 +655,23 @@ void state_machine::resonse_append_entries_response(uint32_t to_node_id,
                                                     uint64_t match_index,
                                                     bool heart_beat) {
   BOOST_ASSERT(match_index == 0 || log_index_to_offset(match_index) < log_.size());
-  append_entries_response response;
-  response.set_source(node_id_);
-  response.set_dest(to_node_id);
-  response.set_term(current_term_);
-  response.set_success(success);
-  response.set_match_index(match_index);
-  response.set_heart_beat(heart_beat);
-  response.set_lead(leader_id_);
-  response.set_tick_sequence(tick_sequence);
+  auto response = std::make_shared<append_entries_response>();
+  response->set_source(node_id_);
+  response->set_dest(to_node_id);
+  response->set_term(current_term_);
+  response->set_success(success);
+  response->set_match_index(match_index);
+  response->set_heart_beat(heart_beat);
+  response->set_lead(leader_id_);
+  response->set_tick_sequence(tick_sequence);
 
   if (not heart_beat) {
     BOOST_LOG_TRIVIAL(trace)
       << "response append entry, node " << id_2_name(node_id_) << " match_index "
-      << response.match_index() << "  to " << id_2_name(to_node_id);
-  }
-  auto i = clients_.find(to_node_id);
-  if (i == clients_.end()) {
-    BOOST_ASSERT_MSG(false, "invalid node id");
-    return;
+      << response->match_index() << "  to " << id_2_name(to_node_id);
   }
 
-  result<void> r = async_send(i->second, RAFT_APPEND_ENTRIES_RESP, response);
+  result<void> r = async_send(to_node_id, RAFT_APPEND_ENTRIES_RESP, response);
   if (not r) {
     BOOST_LOG_TRIVIAL(error) << "send message RAFT_REQ_VOTE_RESP error, " << r.error().message();
   }
@@ -682,10 +679,11 @@ void state_machine::resonse_append_entries_response(uint32_t to_node_id,
 
 void state_machine::handle_append_entries_request(
     const append_entries_request &request) {
+#ifdef MULTI_THREAD_EXECUTOR
   std::scoped_lock l(mutex_);
+#endif
   bool heart_beat = request.heart_beat();
 
-  // prev_heart_beat_ = boost::posix_time::microsec_clock::local_time();
   if (not heart_beat) {
     if (request.entries_size() > 0) {
       BOOST_LOG_TRIVIAL(trace) << "node: " << node_name_ << " handle append log , index：["
@@ -694,7 +692,7 @@ void state_machine::handle_append_entries_request(
     }
   }
   if (request.term() < current_term_) {
-    BOOST_LOG_TRIVIAL(info) << "node: " << node_name_ << " reject request ：term:" << request.term()
+    BOOST_LOG_TRIVIAL(info) << "node: " << node_name_ << " reject request term: " << request.term()
                             << " current term " << current_term_;
     resonse_append_entries_response(request.source(),
                                     request.tick_sequence(),
@@ -761,7 +759,7 @@ void state_machine::handle_append_entries_request(
       bool conflict = false;
       size_t log_i = next_offset;
       size_t req_i = entries_append;
-      size_t entries_size = (size_t)request.entries_size();
+      size_t entries_size = (size_t) request.entries_size();
       for (; log_i < log_.size() && req_i < entries_size; log_i++, req_i++) {
         if (request.entries(req_i).term() != log_[log_i]->term()) {
           // conflict, remove 1 entry, not necessarily send a response message
@@ -774,7 +772,7 @@ void state_machine::handle_append_entries_request(
         }
       }
       if (not conflict) {
-        size_t entry_size = (size_t)request.entries_size();
+        size_t entry_size = (size_t) request.entries_size();
         if (req_i < entry_size) {
           // have additional entries, append to the state machine
           uint32_t write_begin_off = log_i;
@@ -795,7 +793,7 @@ void state_machine::handle_append_entries_request(
       }
     } else if (log_.size() == next_offset) {
       // append log entries,
-      auto num_entries = (size_t)request.entries().size();
+      auto num_entries = (size_t) request.entries().size();
       std::vector<ptr<log_entry>> vec;
       size_t num = 0;
       for (size_t i = entries_append; i < num_entries; i++, num++) {
@@ -825,17 +823,18 @@ void state_machine::handle_append_entries_response(
   update_term(response.term());
   uint32_t src_node_id = response.source();
   progress &p = progress_[src_node_id];
-
-  boost::posix_time::ptime now = boost::posix_time::microsec_clock::local_time();
-  uint64_t ms = ((now - start_).total_microseconds() - response.tick_sequence()) / 1000;
-  //BOOST_LOG_TRIVIAL(trace) << "RTT " << ms << "ms";
-  if (ms > az_rtt_ms_ * flow_control_rtt_num_) {
-    if (p.append_log_num_ > 2) {
-      p.append_log_num_ >>= 1;
-    }
-  } else {
-    if (p.append_log_num_ < MAX_RAFT_LOG_ENTRIES) {
-      p.append_log_num_ <<= 1;
+  {
+    auto now = std::chrono::steady_clock::now();
+    uint64_t ms = to_milliseconds(now - start_) - response.tick_sequence();
+    //BOOST_LOG_TRIVIAL(trace) << "RTT " << ms << "ms";
+    if (ms > az_rtt_ms_ * flow_control_rtt_num_) {
+      if (p.append_log_num_ > 2) {
+        p.append_log_num_ >>= 1;
+      }
+    } else {
+      if (p.append_log_num_ < MAX_RAFT_LOG_ENTRIES) {
+        p.append_log_num_ <<= 1;
+      }
     }
   }
   if (response.term() != current_term_) {
@@ -856,10 +855,10 @@ void state_machine::handle_append_entries_response(
       BOOST_ASSERT(p.next_index_ != 0);
     }
     if (not heart_beat) {
-      boost::posix_time::ptime pt = boost::posix_time::microsec_clock::local_time();
-      uint64_t msec = (pt - start_).total_milliseconds();
+      auto now = std::chrono::steady_clock::now();
+      uint64_t ms = to_milliseconds(now - start_);
       BOOST_LOG_TRIVIAL(trace)
-        << node_name_ << " " << msec << "ms, match index： "
+        << node_name_ << " " << ms << "ms, match index： "
         << response.match_index() << " receive from : " << id_2_name(src_node_id);
 
       leader_advance_commit_index();
@@ -900,8 +899,8 @@ void state_machine::handle_debug(const std::string &path, std::ostream &os) {
       os << "term :" << log->term();
       os << " index : " << log->index();
       os << std::endl;
-      for (auto op: log->xlog()) {
-        os << "    op: " << op.log_type() << " tx : " << op.xid() << std::endl;
+      for (auto op : log->xlog()) {
+        os << "    op: " << op.log_type() << " tx_rm : " << op.xid() << std::endl;
       }
     }
   } else if (boost::regex_match(path, url_log_offset)) {
@@ -911,8 +910,8 @@ void state_machine::handle_debug(const std::string &path, std::ostream &os) {
       os << "term :" << log->term();
       os << " index : " << log->index();
       os << std::endl;
-      for (auto op: log->xlog()) {
-        os << "    op: " << op.log_type() << " tx : " << op.xid() << std::endl;
+      for (auto op : log->xlog()) {
+        os << "    op: " << op.log_type() << " tx_rm : " << op.xid() << std::endl;
       }
     }
   }
@@ -920,54 +919,54 @@ void state_machine::handle_debug(const std::string &path, std::ostream &os) {
 
 void state_machine::on_recv_message(message_type id, byte_buffer &msg_body) {
   switch (id) {
-  case message_type::RAFT_APPEND_ENTRIES_REQ: {
-    append_entries_request request;
-    result<void> res = buf_to_pb(msg_body, request);
-    if (res) {
-      handle_append_entries_request(request);
-    }
+    case message_type::RAFT_APPEND_ENTRIES_REQ: {
+      append_entries_request request;
+      result<void> res = buf_to_pb(msg_body, request);
+      if (res) {
+        handle_append_entries_request(request);
+      }
 
-  }
-    break;
-  case message_type::RAFT_APPEND_ENTRIES_RESP: {
-    append_entries_response response;
-    result<void> res = buf_to_pb(msg_body, response);
-    if (res) {
-      handle_append_entries_response(response);
     }
-    break;
-  }
-  case message_type::RAFT_REQ_VOTE_REQ: {
-    request_vote_request request;
-    result<void> res = buf_to_pb(msg_body, request);
-    if (res) {
-      handle_request_vote_request(request);
+      break;
+    case message_type::RAFT_APPEND_ENTRIES_RESP: {
+      append_entries_response response;
+      result<void> res = buf_to_pb(msg_body, response);
+      if (res) {
+        handle_append_entries_response(response);
+      }
+      break;
     }
-    break;
-  }
-  case message_type::RAFT_REQ_VOTE_RESP: {
-    request_vote_response response;
-    result<void> res = buf_to_pb(msg_body, response);
-    if (res) {
-      handle_request_vote_response(response);
+    case message_type::RAFT_REQ_VOTE_REQ: {
+      request_vote_request request;
+      result<void> res = buf_to_pb(msg_body, request);
+      if (res) {
+        handle_request_vote_request(request);
+      }
+      break;
     }
-    break;
-  }
-  case message_type::RAFT_TRANSFER_LEADER: {
-    //to_pb_msg(msg_body, );
-    transfer_leader msg;
-    to_pb(msg_body, msg);
-    handle_transfer_leader(msg);
-    break;
-  }
-  case message_type::RAFT_TRANSFER_NOTIFY: {
-    transfer_notify msg;
-    to_pb(msg_body, msg);
-    handle_transfer_notify(msg);
-    break;
-  }
-  default:BOOST_ASSERT_MSG(false, "unknown message");
-    break;
+    case message_type::RAFT_REQ_VOTE_RESP: {
+      request_vote_response response;
+      result<void> res = buf_to_pb(msg_body, response);
+      if (res) {
+        handle_request_vote_response(response);
+      }
+      break;
+    }
+    case message_type::RAFT_TRANSFER_LEADER: {
+      //to_pb_msg(msg_body, );
+      auto msg = std::make_shared<transfer_leader>();
+      to_pb(msg_body, *msg);
+      handle_transfer_leader(msg);
+      break;
+    }
+    case message_type::RAFT_TRANSFER_NOTIFY: {
+      transfer_notify msg;
+      to_pb(msg_body, msg);
+      handle_transfer_notify(msg);
+      break;
+    }
+    default:BOOST_ASSERT_MSG(false, "unknown message");
+      break;
   }
 }
 sm_status state_machine::status() {
@@ -1056,14 +1055,36 @@ void state_machine::update_commit_index(uint64_t index) {
   BOOST_LOG_TRIVIAL(trace) << node_name_ << "commit " << off_begin << " : " << off_end;
 
   if (fn_on_commit_entries_) {
-    fn_on_commit_entries_(EC::EC_OK, state_ == RAFT_STATE_LEADER, vec);
+    if (tx_logs_.size() > APPEND_LOG_ENTRIES_BATCH_MAX) {
+      // penalty for a fast CC Block beyond RL Block's processing capability
+      // delay some milliseconds
+#ifdef DELAY_PENALTY
+      uint64_t delay_ms = tx_logs_.size() * 2;
+      ptr<boost::asio::steady_timer> timer(
+          new boost::asio::steady_timer(
+              sender_->get_service(SERVICE_ASYNC_CONTEXT),
+              boost::asio::chrono::milliseconds(delay_ms)));
+      timer->async_wait([timer, vec, this](const boost::system::error_code &error) {
+        timer.get();
+        if (not error.failed()) {
+          this->fn_on_commit_entries_(EC::EC_OK, this->state_==RAFT_STATE_LEADER, vec);
+        }
+      });
+#else
+      BOOST_LOG_TRIVIAL(info) << node_name_ << " log pile up " << tx_logs_.size();
+
+      fn_on_commit_entries_(EC::EC_OK, state_ == RAFT_STATE_LEADER, vec);
+#endif //
+    } else {
+      fn_on_commit_entries_(EC::EC_OK, state_ == RAFT_STATE_LEADER, vec);
+    }
   }
   commit_index_ = commit_index;
 }
 
-void state_machine::handle_transfer_leader(const transfer_leader &msg) {
-  std::scoped_lock l(mutex_);
-  node_id_t id = msg.leader_transferee();
+void state_machine::handle_transfer_leader(const ptr<transfer_leader> msg) {
+
+  node_id_t id = msg->leader_transferee();
   if (state_ == RAFT_STATE_FOLLOWER) {
     if (leader_id_ != 0) {
       auto r = async_send(leader_id_, RAFT_TRANSFER_LEADER, msg);
@@ -1080,8 +1101,8 @@ void state_machine::handle_transfer_leader(const transfer_leader &msg) {
       return;
     }
     if (t->second.match_index_ == last_log_index()) {
-      transfer_notify m;
-      m.set_leader_transferee(id);
+      auto m = std::make_shared<transfer_notify>();
+      m->set_leader_transferee(id);
       auto r = async_send(id, RAFT_TRANSFER_NOTIFY, m);
       if (not r) {
         BOOST_LOG_TRIVIAL(error) << "send raft transfer leader notify error " << r.error().message();
@@ -1099,8 +1120,8 @@ void state_machine::handle_transfer_notify(const transfer_notify &) {
 
 void state_machine::node_transfer_leader(node_id_t node_id) {
   std::scoped_lock l(mutex_);
-  transfer_leader msg;
-  msg.set_leader_transferee(node_id);
+  auto msg = std::make_shared<transfer_leader>();
+  msg->set_leader_transferee(node_id);
   handle_transfer_leader(msg);
 }
 

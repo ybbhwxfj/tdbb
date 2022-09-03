@@ -1,4 +1,5 @@
 #pragma once
+
 #include <boost/assert.hpp>
 #include <google/protobuf/util/json_util.h>
 

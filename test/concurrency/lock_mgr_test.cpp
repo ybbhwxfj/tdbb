@@ -13,11 +13,14 @@
 #define NUM_PREDICATE 1
 #define NUM_TX 100
 
-class tx_ctx_mock : public tx {
-public:
-  explicit tx_ctx_mock(xid_t xid) : tx(xid) {}
+#include <boost/asio.hpp>
 
-  void lock_acquire(EC, oid_t) override {}
+class tx_ctx_mock : public tx_rm {
+ public:
+  explicit tx_ctx_mock(xid_t xid, boost::asio::io_context &ctx) :
+      tx_rm(boost::asio::io_context::strand(ctx), xid) {}
+
+  void async_lock_acquire(EC, oid_t) override {}
 };
 
 struct tx_lock_t {
@@ -25,15 +28,15 @@ struct tx_lock_t {
   oid_t oid_{};
   lock_mode mode_;
   predicate pred_;
-  ptr<tx> ctx_;
+  ptr<tx_rm> ctx_;
 };
 
 class random_value {
   std::default_random_engine generator_;
   std::uniform_int_distribution<uint64_t> distribution_;
-public:
+ public:
   random_value(uint64_t min, uint64_t max) :
-      generator_((uint64_t)this),
+      generator_((uint64_t) this),
       distribution_(min, max) {
 
   };
@@ -49,7 +52,7 @@ enum range_type {
   RANGE_OPEN = 3,
 };
 
-std::vector<tx_lock_t> gen_test_case() {
+std::vector<tx_lock_t> gen_test_case(boost::asio::io_context &c) {
   std::vector<tx_lock_t> pred_list;
 
   random_value rnd(TUPLE_ID_MIN, TUPLE_ID_MAX);
@@ -58,7 +61,7 @@ std::vector<tx_lock_t> gen_test_case() {
     std::set<tuple_id_t> key_set;
     boost::icl::interval_set<tuple_id_t> interval_set;
     oid_t oid = 1;
-    ptr<tx> ctx(new tx_ctx_mock(xid));
+    ptr<tx_rm> ctx(new tx_ctx_mock(xid, c));
     for (uint32_t i = 0; i < NUM_READ_KEY; i++) {
       uint64_t key = rnd.value();
       if (key_set.contains(key)) {
@@ -114,7 +117,7 @@ std::vector<tx_lock_t> gen_test_case() {
           continue;
         }
         bool overlapped;
-        for (tuple_id_t t: key_set) {
+        for (tuple_id_t t : key_set) {
           if (boost::icl::contains(l.pred_.interval_, t)) {
             overlapped = true;
           }
@@ -137,15 +140,14 @@ std::vector<tx_lock_t> gen_test_case() {
 }
 
 BOOST_AUTO_TEST_CASE(lock_mgr_test) {
-  //config conf;
-  //ptr<net_service> service(new net_service(conf));
-  //ptr<deadlock> dl(new deadlock(nullptr, service.get(), 1));
-  lock_mgr mgr(1, nullptr, nullptr, nullptr);
-  std::vector<tx_lock_t> v = gen_test_case();
-  for (auto &l: v) {
+  // this io_context have no effect, only work as test stub
+  boost::asio::io_context ctx(1);
+  lock_mgr mgr(1, ctx, nullptr, nullptr, nullptr);
+  std::vector<tx_lock_t> v = gen_test_case(ctx);
+  for (auto &l : v) {
     mgr.lock(l.xid_, l.oid_, l.mode_, l.pred_, l.ctx_);
   }
-  for (auto &l: v) {
+  for (auto &l : v) {
     mgr.unlock(l.xid_, l.mode_, l.pred_);
   }
 }

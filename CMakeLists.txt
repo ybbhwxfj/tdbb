@@ -31,6 +31,7 @@ set(STORAGE_LIBS
         bz2
         zstd
         snappy
+        tbb
         )
 
 include_directories(
@@ -60,6 +61,7 @@ find_package(Boost REQUIRED
         serialization
         thread
         json
+        chrono
         )
 
 

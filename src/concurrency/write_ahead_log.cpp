@@ -13,7 +13,7 @@ write_ahead_log::write_ahead_log(node_id_t node_id, node_id_t rlb_node, net_serv
 }
 
 void write_ahead_log::set_cno(uint64_t cno) {
-  std::scoped_lock l(mutex_);
+
   cno_ = cno;
 }
 
@@ -25,14 +25,14 @@ void write_ahead_log::async_append(tx_log &entry) {
 }
 
 void write_ahead_log::async_append(std::vector<tx_log> &entry) {
-  std::scoped_lock l(mutex_);
-  ccb_append_log_request req;
-  req.set_source(node_id_);
-  req.set_dest(rlb_node_id_);
-  req.set_cno(cno_);
-  for (tx_log &log: entry) {
-    BOOST_LOG_TRIVIAL(trace) << node_name_ << " write ahead log async_append tx log " << log.xid();
-    req.add_logs()->Swap(&log);
+
+  auto req = std::make_shared<ccb_append_log_request>();
+  req->set_source(node_id_);
+  req->set_dest(rlb_node_id_);
+  req->set_cno(cno_);
+  for (tx_log &log : entry) {
+    BOOST_LOG_TRIVIAL(trace) << node_name_ << " write ahead log async_append tx_rm log " << log.xid();
+    req->add_logs()->Swap(&log);
   }
   result<void> sr = service_->async_send(rlb_node_id_, C2R_APPEND_LOG_REQ, req);
   if (not sr) {

@@ -1,14 +1,15 @@
 #pragma once
+
 #include<vector>
 #include "common/column_desc.h"
 
 class row_desc {
-private:
+ private:
   uint32_t fix_length_columns_;
   uint32_t var_length_columns_;
   uint32_t tuple_header_size_;
   std::vector<column_desc> column_;
-public:
+ public:
   const std::vector<column_desc> &columns() const {
     return column_;
   }

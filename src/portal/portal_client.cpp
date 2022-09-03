@@ -24,7 +24,7 @@ const char *BC_COMMAND_RUN = "benchmark";
 using boost::asio::ip::tcp;
 
 class block_client {
-private:
+ private:
   bool close_server_;
   config conf_;
   boost::barrier barrier1_;
@@ -32,7 +32,7 @@ private:
   std::unordered_map<node_id_t, std::string> response_;
   ptr<debug_server> debug_;
   std::vector<node_config> conf_list_;
-public:
+ public:
   block_client(const config &conf, bool close_server)
       : close_server_(close_server),
         conf_(conf),
@@ -46,7 +46,7 @@ public:
   void run_command(const std::string &command);
 
   void close();
-private:
+ private:
   void send_close_request();
   void output_result_thread(ptr<workload> &wl);
   void load_data();
@@ -72,7 +72,7 @@ void block_client::run_command(const std::string &command) {
 
   debug_ = std::make_shared<debug_server>("0.0.0.0", port, debug_handler);
   debug_->start();
-  set_thread_name("bc");
+  set_thread_name("FE");
   try {
     if (command == BC_COMMAND_LOAD) {
       load_data();
@@ -87,24 +87,25 @@ void block_client::run_command(const std::string &command) {
     BOOST_LOG_TRIVIAL(info) << "run command " << command << " done";
   } catch (std::exception &ex) {
     BOOST_LOG_TRIVIAL(error) << "catch exception when run command " << command << " error: " << ex.what();
-    close();
   }
 }
 
 void block_client::close() {
   if (close_server_) {
     send_close_request();
+    BOOST_LOG_TRIVIAL(info) << "block server closed;";
   }
   if (debug_) {
     debug_->stop();
     debug_->join();
+    BOOST_LOG_TRIVIAL(info) << "debug server closed";
   }
 }
 
 void block_client::load_data() {
   std::vector<ptr<boost::thread>> threads;
   ptr<workload> wl(new workload(conf_));
-  for (const node_config &nc: conf_.node_config_list()) {
+  for (const node_config &nc : conf_.node_config_list()) {
     if (is_dsb_block(nc.node_id())) {
       threads.emplace_back(new boost::thread(
           boost::bind(&block_client::load_data_thread, this, nc.node_id(), wl)));
@@ -112,7 +113,7 @@ void block_client::load_data() {
 
   }
 
-  for (ptr<boost::thread> &t: threads) {
+  for (ptr<boost::thread> &t : threads) {
     t->join();
   }
   BOOST_LOG_TRIVIAL(info) << "block_client load data done";
@@ -124,7 +125,7 @@ void block_client::run_benchmark() {
   uint32_t num_rg_ = conf_.num_rg();
   uint32_t num_terminal = conf_.num_terminal();
 
-  for (const auto &n: conf_.node_config_list()) {
+  for (const auto &n : conf_.node_config_list()) {
     if (is_ccb_block(n.node_id())) {
       db_client client(n);
       for (;;) {
@@ -146,7 +147,7 @@ void block_client::run_benchmark() {
   ptr<boost::thread> t = std::make_shared<boost::thread>(boost::bind(
       &block_client::output_result_thread, this, wl));
   threads.push_back(t);
-  for (ptr<boost::thread> &th: threads) {
+  for (ptr<boost::thread> &th : threads) {
     th->join();
   }
   BOOST_LOG_TRIVIAL(info) << "block_client benchmark done";
@@ -173,8 +174,13 @@ void block_client::run_benchmark_thread(shard_id_t rg_id, uint32_t terminal_id,
   // wait all thread generate requests
   barrier1_.wait();
 
-  BOOST_LOG_TRIVIAL(info) << "run new-order on RG " << rg_id << " terminal " << terminal_id;
+  if (conf_.get_test_config().cached_tuple_percentage() > 0.0) {
+    BOOST_LOG_TRIVIAL(info) << "warm up cache " << rg_id << " terminal " << terminal_id;
+    wl->warm_up_cached(rg_id, terminal_id);
+  }
 
+  BOOST_LOG_TRIVIAL(info) << "run new-order on RG " << rg_id << " terminal " << terminal_id;
+  sleep(2);
   barrier2_.wait();
 
   wl->run_new_order(rg_id, terminal_id);
@@ -191,7 +197,7 @@ void block_client::send_close_request() {
 
   for (;;) {
     int not_closed = 0;
-    for (const auto &n: conf_list_) {
+    for (const auto &n : conf_list_) {
       if (closed_node.contains(n.node_id())) {
         continue;
       }
@@ -215,7 +221,7 @@ void block_client::send_close_request() {
 }
 
 void block_client::handle_debug(const std::string &path, std::ostream &os) {
-  for (const auto &c: conf_list_) {
+  for (const auto &c : conf_list_) {
     const std::string &addr = c.address();
     auto port = uint16_t(c.port() + 1000);
     std::stringstream ssm;
@@ -240,7 +246,7 @@ void block_client::handle_debug(const std::string &path, std::ostream &os) {
 void block_client::debug_deadlock(std::ostream &os) {
   wait_path p;
   dependency_set_array array;
-  for (auto &i: response_) {
+  for (auto &i : response_) {
     dependency_set &ds = *array.add_array();
     //os << i.second << std::endl;
     bool ok = json_to_pb(i.second, ds);
@@ -255,7 +261,7 @@ void block_client::debug_deadlock(std::ostream &os) {
   os << json << std::endl;
   os << "---------------" << std::endl;
   auto fn = [&os](const std::vector<xid_t> &circle) {
-    for (xid_t x: circle) {
+    for (xid_t x : circle) {
       os << "->" << x;
     }
     os << std::endl;
@@ -317,6 +323,12 @@ int portal_client(int argc, const char *argv[]) {
   }
 
   block_client cli(conf, close_server);
+  BOOST_LOG_TRIVIAL(info) << "run block-db client ";
+  BOOST_LOG_TRIVIAL(info) << "  DB type: " << enum2str(block_db_type());
+  BOOST_LOG_TRIVIAL(info) << "  terminal: " << conf.get_tpcc_config().num_terminal();
+  BOOST_LOG_TRIVIAL(info) << "  warehouse: " << conf.get_tpcc_config().num_warehouse();
+  BOOST_LOG_TRIVIAL(info) << "  distribute tx_rm: " << conf.get_tpcc_config().percent_distributed() * 100.0 << "%";
+
   cli.run_command(command);
   BOOST_LOG_TRIVIAL(info) << "client run command " << command << " done";
   cli.close();
@@ -324,8 +336,8 @@ int portal_client(int argc, const char *argv[]) {
 }
 
 void sort_dependency_array(dependency_set_array &array) {
-  for (dependency_set &ds: *array.mutable_array()) {
-    for (dependency &d: *ds.mutable_dep()) {
+  for (dependency_set &ds : *array.mutable_array()) {
+    for (dependency &d : *ds.mutable_dep()) {
       std::sort(d.mutable_out()->begin(), d.mutable_out()->end(), [](uint64_t x, uint64_t y) {
         return x < y;
       });

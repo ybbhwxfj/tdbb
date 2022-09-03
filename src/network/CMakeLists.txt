@@ -10,3 +10,4 @@ add_library(
         debug_client.cpp
 )
 
+add_dependencies(network proto)

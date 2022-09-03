@@ -26,7 +26,7 @@ std::string HELLO_MESSAGE_LARGE;
 std::map<int, std::string> MESSAGE;
 
 class test_server {
-public:
+ public:
   test_server(const config &conf) : conf_(conf) {}
 
   void close() {
@@ -39,47 +39,46 @@ public:
 
   void start() {
     service_ = ptr<net_service>(new net_service(conf_));
-    server_ = ptr<sock_server>(new sock_server(conf_, service_.get()));
+    server_ = ptr<sock_server>(new sock_server(conf_, service_));
 
-    message_handler handler = [this](ptr<connection> conn, message_type id,
-                                     byte_buffer &buffer) -> result<void> {
+    message_handler handler = [this](
+        ptr<connection> conn,
+        message_type id,
+        byte_buffer &buffer,
+        msg_hdr *
+    ) -> result<void> {
       switch (id) {
-      case message_type::REQUEST_HELLO: {
-        hello msg;
-        to_pb(buffer, msg);
-        BOOST_CHECK(MESSAGE[msg.id()] == msg.message());
+        case message_type::REQUEST_HELLO: {
+          auto msg = std::make_shared<hello>();
+          to_pb(buffer, *msg);
+          BOOST_CHECK(MESSAGE[msg->id()] == msg->message());
 
-        for (const node_config &c: conf_.node_config_list()) {
-          if (c.is_client()) {
-            continue;
+          for (const node_config &c : conf_.node_config_list()) {
+            if (c.is_client()) {
+              continue;
+            }
+            node_id_t node_id = c.node_id();
+            auto r = service_->async_send(node_id, RESPONSE_HELLO, msg);
+            if (!r) {
+              BOOST_LOG_TRIVIAL(error) << "async send error";
+            } else {
+
+            }
           }
-          node_id_t node_id = c.node_id();
-          auto r = service_->async_send(node_id, RESPONSE_HELLO, msg);
-          if (!r) {
-            BOOST_LOG_TRIVIAL(error) << "async send error";
-          } else {
+
+          if (conn) {
 
           }
+          service_->conn_async_send(conn, RESPONSE_HELLO, msg);
+          break;
         }
-
-        if (conn) {
-
+        case message_type::RESPONSE_HELLO: {
+          auto response = std::make_shared<hello>();
+          to_pb(buffer, *response);
+          BOOST_CHECK(MESSAGE[response->id()] == response->message());
+          break;
         }
-
-        auto r = conn->async_send(RESPONSE_HELLO, msg);
-        if (!r) {
-          BOOST_LOG_TRIVIAL(error) << "async send error";
-        }
-
-        break;
-      }
-      case message_type::RESPONSE_HELLO: {
-        hello response;
-        to_pb(buffer, response);
-        BOOST_CHECK(MESSAGE[response.id()] == response.message());
-        break;
-      }
-      default:BOOST_ASSERT(false);
+        default:BOOST_ASSERT(false);
       }
 
       return outcome::success();
@@ -88,7 +87,7 @@ public:
     service_->register_handler(handler);
     server_->start();
   }
-private:
+ private:
   config conf_;
   ptr<net_service> service_;
   ptr<sock_server> server_;
@@ -136,7 +135,7 @@ BOOST_AUTO_TEST_CASE(network_test) {
   option.num_shard = 1;
   std::vector<config> conf = generate_config(option);
   std::vector<ptr<test_server>> server;
-  for (auto c: conf) {
+  for (auto c : conf) {
     ptr<test_server> s(new test_server(c));
     server.push_back(s);
     s->start();
@@ -164,14 +163,14 @@ BOOST_AUTO_TEST_CASE(network_test) {
     thds.push_back(thd);
   }
 
-  for (auto t: thds) {
+  for (auto t : thds) {
     t->join();
   }
 
-  for (auto s: server) {
+  for (auto s : server) {
     s->close();
   }
-  for (auto s: server) {
+  for (auto s : server) {
     s->join();
   }
 

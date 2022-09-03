@@ -21,7 +21,7 @@ using namespace std;
 class raft_test_context;
 
 class raft_node : public std::enable_shared_from_this<raft_node>, public log_service {
-public:
+ public:
   std::recursive_mutex mutex_;
   raft_node(const config &conf, const std::string &case_name);
   ~raft_node() {}

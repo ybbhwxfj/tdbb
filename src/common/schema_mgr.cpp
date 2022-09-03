@@ -2,17 +2,16 @@
 
 void schema_mgr::from_json(boost::json::object &obj) {
   boost::json::array arr = obj["Table"].as_array();
-  for (auto i = arr.begin(); i != arr.end(); i++) {
+  for (auto &i : arr) {
     table_desc td;
-    td.from_json(i->as_object());
+    td.from_json(i.as_object());
     table_[td.table_name()] = td;
   }
 
-  for (auto i = table_.begin(); i != table_.end(); i++) {
-    table_id_t id = str_2_table_id(i->second.table_name());
-    i->second.set_table_id(id);
-    id++;
-    id2table_[i->second.table_id()] = i->second;
+  for (auto &i : table_) {
+    table_id_t id = str_2_table_id(i.second.table_name());
+    i.second.set_table_id(id);
+    id2table_[i.second.table_id()] = i.second;
   }
 }
 

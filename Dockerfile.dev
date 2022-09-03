@@ -18,6 +18,9 @@ RUN \
     liblz4-dev \
     libgflags-dev \
     liburing-dev \
+    libssl-dev \
+    libgflags-dev \
+    libreadline-dev \
     git \
     vim \
     openssh-client \
@@ -29,24 +32,20 @@ RUN \
     iputils-ping \
     iproute2 \
     rsync \
-    gdb
+    gdb \
+    mysql-client \
+    mysql-server
 
 RUN pip3 install \
     paramiko
 
-RUN git clone git@github.com:ybbh/block-db.git
+RUN rm -rf /root/block-db
+COPY . /root/block-db
+
 
 RUN cd /root/block-db && \
     cd third_party && \
-    bash ../script/build_third_party.sh
-
-# copy include and lib to system path
-RUN cp -r /root/block-db/third_party/include /usr
-RUN cp -r /root/block-db/third_party/lib /usr
-RUN cp -r /root/block-db/third_party/bin /usr
-RUN rm -rf /root/block-db/third_party/include
-RUN rm -rf /root/block-db/third_party/lib
-RUN rm -rf /root/block-db/third_party/bin
+    bash ../script/build_third_party.sh -i /usr
 
 RUN rm -rf /root/.ssh
 RUN ssh-keygen -q -t rsa -N '' -f /root/.ssh/id_rsa

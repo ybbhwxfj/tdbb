@@ -68,14 +68,19 @@ int debug_request(
     http::response<http::dynamic_body> res;
 
     // Receive the HTTP response
+    boost::beast::http::parser<false, http::dynamic_body> p(std::move(res));
+    p.body_limit(UINT64_MAX);
+    beast::error_code ec;
+    http::read(stream, buffer, p, ec);
+    if (ec.failed()) {
+      throw beast::system_error{ec};
+    }
 
-    http::read(stream, buffer, res);
 
     // Write the message body to stream
-    os << beast::buffers_to_string(res.body().data());
+    os << beast::buffers_to_string(p.get().body().data());
 
     // Gracefully close the socket
-    beast::error_code ec;
     stream.socket().shutdown(tcp::socket::shutdown_both, ec);
 
     // not_connected happens sometimes

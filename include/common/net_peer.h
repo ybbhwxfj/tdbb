@@ -3,7 +3,7 @@
 #include <string>
 
 class net_peer {
-public:
+ public:
   net_peer() {}
 
   net_peer(uint32_t _id, std::string _addr, uint32_t _port) :
@@ -14,8 +14,10 @@ public:
   const std::string &name() const { return name_; }
 
   uint32_t port() const { return port_; }
+
   const std::string &addr() const { return addr_; }
-private:
+
+ private:
   uint32_t id_;
   std::string name_;
   uint32_t port_;

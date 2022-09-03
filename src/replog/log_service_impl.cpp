@@ -16,11 +16,12 @@ log_entry_type to_log_entry_type(tx_cmd_type type) {
   }
 }
 
-log_service_impl::log_service_impl(const config conf, net_service *service) :
+log_service_impl::log_service_impl(const config conf, ptr<net_service> service) :
     conf_(conf),
     dsb_node_id_(0),
     cno_(0),
-    service_(service) {
+    service_(service),
+    log_strand_(service->get_service(SERVICE_ASYNC_CONTEXT)) {
   boost::filesystem::path p(conf_.db_path());
   p.append("log");
   rocksdb::Options options;
@@ -58,9 +59,9 @@ void log_service_impl::set_dsb_id(node_id_t id) {
 
 void log_service_impl::commit_log(const std::vector<ptr<log_entry>> &entry, const log_write_option &opt) {
   rocksdb::WriteBatch batch;
-  for (ptr<log_entry> e: entry) {
+  for (ptr<log_entry> e : entry) {
     uint64_t index = e->index();
-    for (const tx_log &l: e->xlog()) {
+    for (const tx_log &l : e->xlog()) {
       uint64_t xid = l.xid();
       tx_log &mlog = const_cast<tx_log &>(l);
       mlog.set_index(e->index());
@@ -105,7 +106,7 @@ void log_service_impl::commit_log(const std::vector<ptr<log_entry>> &entry, cons
 }
 void log_service_impl::write_log(const std::vector<ptr<log_entry>> &entry, const log_write_option &opt) {
   rocksdb::WriteBatch batch;
-  for (ptr<log_entry> e: entry) {
+  for (ptr<log_entry> e : entry) {
     uint64_t index = e->index();
     tx_log_index ek(index);
     std::string ev = e->SerializeAsString();
@@ -219,7 +220,7 @@ void log_service_impl::replay_to_dsb() {
 
   if (not abort_xid.empty()) {
     rocksdb::WriteBatch batch;
-    for (xid_t xid: abort_xid) {
+    for (xid_t xid : abort_xid) {
       tx_log_index key(xid, INT64_MAX, TX_CMD_REPLAY_DSB);
       tx_log log;
       log.set_index(INDEX_TX_CLEAN);
@@ -236,7 +237,7 @@ void log_service_impl::replay_to_dsb() {
 
 void log_service_impl::handle_replay_to_dsb_response(const replay_to_dsb_response &msg) {
   rocksdb::WriteBatch batch;
-  for (const tx_log &l: msg.logs()) {
+  for (const tx_log &l : msg.logs()) {
     xid_t xid = l.xid();
     tx_log_index key(l.xid(), l.index(), to_log_entry_type(l.log_type()));
     tx_log log;
@@ -278,7 +279,7 @@ void log_service_impl::clean_up() {
   for (iter->SeekToFirst(); iter->Valid(); iter->Next()) {
     tx_log_index k(iter->key().data(), iter->key().size());
     if (xid != k.xid()) {
-      // find a new tx
+      // find a new tx_rm
       le_consistency = true;
     }
     if (k.xid() != 0) {
@@ -307,17 +308,19 @@ void log_service_impl::clean_up() {
 }
 
 void log_service_impl::tick() {
-  boost::asio::io_context &service = service_->get_service(SERVICE_LOG);
+  boost::asio::io_context &service = service_->get_service(SERVICE_ASYNC_CONTEXT);
   ptr<boost::asio::steady_timer> timer(
       new boost::asio::steady_timer(
           service, boost::asio::chrono::milliseconds(5000)));
-  auto fn_timeout = [timer, this](const boost::system::error_code &error) {
-    if (not error.failed()) {
-      tick();
-    } else {
-      BOOST_LOG_TRIVIAL(error) << " async wait error " << error.message();
-    }
-  };
+  auto fn_timeout = boost::asio::bind_executor(
+      log_strand_,
+      [timer, this](const boost::system::error_code &error) {
+        if (not error.failed()) {
+          tick();
+        } else {
+          BOOST_LOG_TRIVIAL(error) << " async wait error " << error.message();
+        }
+      });
   timer->async_wait(fn_timeout);
   replay_to_dsb();
   clean_up();

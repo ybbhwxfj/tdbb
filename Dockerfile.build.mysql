@@ -1,0 +1,27 @@
+FROM block-dev:latest AS mysql-build
+
+ENV DEBIAN_FRONTEND noninteractive
+
+RUN rm -rf /root/*
+
+
+RUN apt-get remove -y mysql-client
+RUN apt-get remove -y mysql-server
+RUN apt-get autoremove -y
+
+RUN apt-get install -y bison \
+    libncurses-dev \
+    libldap-dev \
+    libgsasl-dev \
+    libsasl2-dev
+
+COPY . /root/block-db
+
+RUN cd /root/block-db/script && \
+     bash ./build_ssl.sh && \
+     bash ./build_mysql.sh
+
+
+
+
+

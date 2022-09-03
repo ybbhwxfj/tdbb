@@ -1,14 +1,17 @@
 #pragma once
+
 #include "common/ptr.hpp"
 #include "common/result.hpp"
 #include <condition_variable>
 #include <memory>
 #include <mutex>
 
-template<typename R> class future {
-private:
+template<typename R>
+class future {
+ private:
   struct context {
     context() : done_(false) {}
+
     std::mutex mtx_;
     std::condition_variable cv_;
     R result_;
@@ -18,7 +21,7 @@ private:
 
   ptr<context> context_;
 
-public:
+ public:
   future() : context_(ptr<context>(new context())) {}
 
   void notify_fail(berror e) {

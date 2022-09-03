@@ -1,4 +1,5 @@
 #pragma once
+
 #include "common/enum_str.h"
 #include <unordered_map>
 #include <string>

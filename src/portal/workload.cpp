@@ -12,6 +12,8 @@
 #include <boost/filesystem.hpp>
 #include <iostream>
 
+static uint32_t PREFIX_NUM = 5;
+
 workload::workload(const config &conf)
     : conf_(conf), num_new_order_(conf.get_tpcc_config().num_new_order()),
       num_term_(conf.num_terminal()), oneshot_(true), stopped_(false) {
@@ -32,6 +34,7 @@ workload::workload(const config &conf)
     } else {
       b.upper -= 1;
     }
+    BOOST_LOG_TRIVIAL(info) << "RG: " << rg << " [" << b.lower << "," << b.upper << ']';
     rg2wid_boundary_.insert(std::make_pair(rg, b));
   }
 }
@@ -62,7 +65,7 @@ result<void> workload::connect_to_lead(per_terminal *t, bool wait_all) {
         if (t->node_id_ == response.rg_lead() &&
             conf_.num_rg() == uint32_t(response.lead().size())) {
           bool leader_ok = true;
-          for (auto nid: response.lead()) {
+          for (auto nid : response.lead()) {
             shard_id_t sid = TO_RG_ID(nid);
             node_id_t lp_node = conf_.get_largest_priority_node_of_shard(sid);
             if (lp_node != 0 && lp_node != nid) {
@@ -118,7 +121,7 @@ void workload::connect_database(shard_id_t rg_id, uint32_t term_id) {
   td->nodes_id_set_ = conf_.get_rg_block_nodes(rg_id, BLOCK_TYPE_ID_CCB);
 
   // generate client to block db
-  for (node_id_t id: td->nodes_id_set_) {
+  for (node_id_t id : td->nodes_id_set_) {
     node_config cf = conf_.get_node_conf(id);
     ptr<db_client> cli(new db_client(cf));
     td->client_set_[id] = cli;
@@ -154,7 +157,7 @@ void workload::connect_database(shard_id_t rg_id, uint32_t term_id) {
 
       if (largest_priority_node != 0) {
         bool found = false;
-        for (auto nid: res.ccb_leader()) {
+        for (auto nid : res.ccb_leader()) {
           if (nid == largest_priority_node) {
             found = true;
           }
@@ -172,7 +175,7 @@ void workload::connect_database(shard_id_t rg_id, uint32_t term_id) {
   // connect to block-db backend
   std::set<uint32_t> connected;
   while (connected.size() != td->client_set_.size()) {
-    for (auto kv: td->client_set_) {
+    for (auto kv : td->client_set_) {
       if (connected.count(kv.first) == 0) {
         if (kv.second->connect()) {
           connected.insert(kv.first);
@@ -203,6 +206,7 @@ void workload::connect_database(shard_id_t rg_id, uint32_t term_id) {
 }
 
 void workload::load_data(node_id_t node_id) {
+  BOOST_LOG_TRIVIAL(info) << id_2_name(node_id) << "begin load table ";
   node_config conf = conf_.get_node_conf(node_id);
   db_client client(conf);
   for (;;) {
@@ -238,7 +242,63 @@ void workload::load_data(node_id_t node_id) {
     BOOST_LOG_TRIVIAL(error) << "client load data failed ...";
     return;
   }
-  BOOST_LOG_TRIVIAL(info) << "load table done ";
+  BOOST_LOG_TRIVIAL(info) << id_2_name(node_id) << " finish load table";
+}
+
+void workload::warm_up_cached(shard_id_t rg_id, uint32_t term_id) {
+  float_t cached_tuple_percentage = conf_.get_test_config().cached_tuple_percentage();
+  std::uniform_real_distribution<> dist(0, 1.0);
+  std::random_device rd;
+  std::mt19937 e(rd());
+  per_terminal *td = get_terminal_data(rg_id, term_id);
+
+  for (const tx_request &t : td->requests_) {
+    tx_request req;
+    req.set_terminal_id(td->terminal_id_);
+    req.set_client_request(true);
+    req.set_oneshot(true);
+    for (const tx_operation &op : t.operations()) {
+      float_t f = dist(e);
+      if (f <= cached_tuple_percentage) {
+        tx_operation cloned_op = op;
+        if (op.op_type() != tx_op_type::TX_OP_INSERT) {
+          BOOST_LOG_TRIVIAL(trace) << " warm up table:" << op.tuple_row().table_id() << " key: "
+                                   << op.tuple_row().tuple_id();
+          cloned_op.set_op_type(tx_op_type::TX_OP_READ);
+          *req.add_operations() = cloned_op;
+        }
+      } else {
+        BOOST_LOG_TRIVIAL(trace) << "uncach row" << op.tuple_row().table_id() << " key: " << op.tuple_row().tuple_id();
+      }
+    }
+
+    if (req.operations_size() > 0) {
+      if (td->client_conn_ == nullptr) {
+        random_get_replica_client(rg_id, td);
+        auto r = connect_to_lead(td, false);
+        if (not r) {
+          BOOST_LOG_TRIVIAL(error) << "connect to lead error" << id_2_name(td->node_id_);
+        }
+      }
+      db_client *cli = td->client_conn_;
+      if (cli == nullptr) {
+        continue;
+      }
+
+      result<void> send_res = cli->send_message(CLIENT_TX_REQ, req);
+      if (!send_res) {
+        td->reset_database_connection();
+        continue;
+      }
+
+      tx_response response;
+      result<void> recv_res = cli->recv_message(CLIENT_TX_RESP, response);
+      if (!recv_res) {
+        td->reset_database_connection();
+        continue;
+      }
+    }
+  }
 }
 
 void workload::run_new_order(shard_id_t rg_id, uint32_t term_id) {
@@ -250,13 +310,17 @@ void workload::run_new_order(shard_id_t rg_id, uint32_t term_id) {
   std::vector<tx_request> &requests = pt.requests_;
   time_tracer tracer;
 
-  time_duration duration_append_log ;
-  time_duration duration_replicate_log;
-  time_duration duration_read;
-  time_duration duration_lock_wait;
-  time_duration duration_part;
+  std::chrono::nanoseconds duration_append_log(0);
+  std::chrono::nanoseconds duration_replicate_log(0);
+  std::chrono::nanoseconds duration_read(0);
+  std::chrono::nanoseconds duration_read_dsb(0);
+  std::chrono::nanoseconds duration_lock_wait(0);
+  std::chrono::nanoseconds duration_part(0);
   uint64_t num_part = 0;
-  for (tx_request &t: requests) {
+  uint32_t num_lock = 0;
+  uint32_t num_read_violate = 0;
+  uint32_t num_write_violate = 0;
+  for (tx_request &t : requests) {
     if (stopped_) {
       break;
     }
@@ -277,6 +341,7 @@ void workload::run_new_order(shard_id_t rg_id, uint32_t term_id) {
     tracer.begin();
     result<void> send_res = cli->send_message(CLIENT_TX_REQ, t);
     if (!send_res) {
+      tracer.end();
       pt.reset_database_connection();
       continue;
     }
@@ -284,6 +349,7 @@ void workload::run_new_order(shard_id_t rg_id, uint32_t term_id) {
     tx_response response;
     result<void> recv_res = cli->recv_message(CLIENT_TX_RESP, response);
     if (!recv_res) {
+      tracer.end();
       pt.reset_database_connection();
       continue;
     }
@@ -292,14 +358,19 @@ void workload::run_new_order(shard_id_t rg_id, uint32_t term_id) {
       tracer.end();
       commit++;
 
-      duration_append_log += boost::posix_time::microseconds(response.latency_append());
-      duration_replicate_log += boost::posix_time::microseconds(response.latency_replicate());;
-      duration_read += boost::posix_time::microseconds(response.latency_read());
-      duration_lock_wait += boost::posix_time::microseconds(response.latency_lock_wait());
-      duration_part += boost::posix_time::microseconds(response.latency_part());
+      duration_append_log += std::chrono::microseconds(response.latency_append());
+      duration_replicate_log += std::chrono::microseconds(response.latency_replicate());;
+      duration_read += std::chrono::microseconds(response.latency_read());
+      duration_read_dsb += std::chrono::microseconds(response.latency_read_dsb());
+      duration_lock_wait += std::chrono::microseconds(response.latency_lock_wait());
+      duration_part += std::chrono::microseconds(response.latency_part());
       num_part += response.access_part();
+      num_write_violate += response.num_write_violate();
+      num_read_violate += response.num_read_violate();
+      num_lock += response.num_lock();
     } else {
-      BOOST_LOG_TRIVIAL(trace) << "tx response error code :" << ec;
+      tracer.end();
+      BOOST_LOG_TRIVIAL(trace) << "tx_rm response error code :" << ec;
       if (ec != EC::EC_TX_ABORT) {
         abort++;
       } else {
@@ -311,19 +382,24 @@ void workload::run_new_order(shard_id_t rg_id, uint32_t term_id) {
                 duration_append_log,
                 duration_replicate_log,
                 duration_read,
+                duration_read_dsb,
                 duration_lock_wait,
-                duration_part
+                duration_part,
+                num_lock,
+                num_read_violate,
+                num_write_violate
       );
       total = 0;
       abort = 0;
       commit = 0;
       num_part = 0;
       duration_lock_wait =
-          duration_part =
-          duration_read =
-          duration_replicate_log =
-              duration_append_log =
-                  boost::posix_time::microseconds(0);
+      duration_part =
+      duration_read =
+      duration_read_dsb =
+      duration_replicate_log =
+      duration_append_log =
+          std::chrono::nanoseconds(0);
       tracer.reset();
     }
   }
@@ -343,8 +419,14 @@ workload::per_terminal *workload::get_terminal_data(shard_id_t rg_id, uint32_t t
 
 }
 
-void workload::gen_new_order(shard_id_t rg_id, uint32_t term_id) {
-  per_terminal *td = get_terminal_data(rg_id, term_id);
+void workload::gen_new_order(
+    shard_id_t rg_id,
+    uint32_t terminal_id) {
+  BOOST_ASSERT(terminal_id != 0);
+  // terminal_id started from 1
+  uint32_t start_ord_id = (terminal_id - 1) * (num_new_order_ / conf_.num_terminal());
+  uint32_t end_ord_id = terminal_id * (num_new_order_ / conf_.num_terminal());
+  per_terminal *td = get_terminal_data(rg_id, terminal_id);
   const tpcc_config &c = conf_.get_tpcc_config();
   if (td->terminal_id_ == 0 || td->terminal_id_ - 1 >= conf_.num_terminal()) {
     return;
@@ -352,7 +434,7 @@ void workload::gen_new_order(shard_id_t rg_id, uint32_t term_id) {
   td->rg_id_ = rg_id;
   id_generator gen(conf_.get_tpcc_config(), rg2wid_boundary_, rg_id);
 
-  for (uint32_t new_order_index = 0; new_order_index < num_new_order_;
+  for (uint32_t new_order_index = start_ord_id; new_order_index < end_ord_id;
        new_order_index++) {
     // begin transaction request
     make_begin_tx_request(td);
@@ -367,8 +449,8 @@ void workload::gen_new_order(shard_id_t rg_id, uint32_t term_id) {
     uint32_t w_key = wid;
     uint32_t d_key = make_district_key(wid, did, c.num_warehouse());
     uint32_t c_key =
-        make_customer_key(wid, did, cid, c.num_warehouse(), c.num_district());
-    uint32_t o_key = make_order_key(wid, oid, c.num_district());
+        make_customer_key(wid, did, cid, c.num_warehouse(), c.num_district_per_warehouse());
+    uint32_t o_key = make_order_key(wid, did, oid, c.num_warehouse(), c.num_district_per_warehouse());
 
     /**
       EXEC SQL SELECT c_discount, c_last, c_credit, w_tax
@@ -404,22 +486,28 @@ void workload::gen_new_order(shard_id_t rg_id, uint32_t term_id) {
     tuple_pb tuple_order; // = "order";
     make_insert_operation(rg_id, TPCC_ORDER, o_key, tuple_order, td);
     tuple_pb tuple_new_order; // = "new order";
-    float_t non_exist = conf_.get_tpcc_config().percent_non_exist_item() *
-        float_t(PERCENT_BASE);
-    float_t distributed =
-        conf_.get_tpcc_config().percent_distributed() * float_t(PERCENT_BASE);
-    bool access_non_exsit =
-        gen.non_exist_gen_.generate() <= uint32_t(non_exist);
+    float_t non_exist = conf_.get_tpcc_config().percent_non_exist_item() * float_t(PERCENT_BASE);
+    bool access_non_exsit = gen.non_exist_gen_.generate() <= uint32_t(non_exist);
+    float_t distributed = conf_.get_tpcc_config().percent_distributed() * float_t(PERCENT_BASE);
     bool distributed_tx = gen.distributed_gen_.generate() <= distributed;
+    float_t hot_item = conf_.get_tpcc_config().percent_hot_row() * float_t(PERCENT_BASE);
+    bool access_hot_item = gen.hot_row_gen_.generate() <= uint32_t(hot_item);
+
     mutable_request(td).set_distributed(distributed_tx);
     make_insert_operation(rg_id, TPCC_NEW_ORDER, o_key,
                           tuple_new_order, td);
     for (uint32_t item_index = 0; item_index < num_item; item_index++) {
       uint32_t iid = 0;
+
       if (access_non_exsit && item_index == num_item / 2) {
         iid = 0;
+        access_non_exsit = false;
       } else {
         iid = gen.iid_gen_.generate();
+        if (access_hot_item && conf_.get_tpcc_config().hot_item_num() > 0) {
+          iid = iid % conf_.get_tpcc_config().hot_item_num() + 1;
+          access_hot_item = false;
+        }
       }
       uint32_t ol_supply_wid = wid;
       uint32_t ol_supply_rg_id = rg_id;
@@ -431,8 +519,8 @@ void workload::gen_new_order(shard_id_t rg_id, uint32_t term_id) {
       uint32_t s_key = make_stock_key(ol_supply_wid, iid, c.num_warehouse());
       //BOOST_LOG_TRIVIAL(trace) << "rg_id:" << ol_supply_rg_id << " supply_wid:" << ol_supply_wid << ", iid:" << iid << ", sotck_key:" << s_key;
       uint32_t ol_key =
-          make_order_line_key(ol_supply_wid, iid, item_index + 1,
-                              c.num_warehouse(), c.num_max_order_line());
+          make_order_line_key(ol_supply_wid, did, iid, item_index + 1,
+                              c.num_warehouse(), c.num_district_per_warehouse(), NUM_ORDER_MAX);
       /**
        EXEC SQL SELECT i_price, i_name , i_data
        INTO :i_price, :i_name, :i_data
@@ -483,17 +571,23 @@ void workload::gen_new_order(shard_id_t rg_id, uint32_t term_id) {
     make_end_tx_request(td);
 
     uint32_t id = 0;
-    for (tx_operation &op: *td->requests_.rbegin()->mutable_operations()) {
+    for (tx_operation &op : *td->requests_.rbegin()->mutable_operations()) {
       op.set_operation_id(++id);
     }
   }
 
   std::default_random_engine rng(td->terminal_id_);
   std::shuffle(std::begin(td->requests_), std::end(td->requests_), rng);
+  /*
+  for (auto i = td->requests_.begin(); i != td->requests_.end(); ++i) {
+    tx_request &req = *i;
+    BOOST_LOG_TRIVIAL(info) <<"term" << td->terminal_id_ << ":, tx req:" << req.DebugString();
+  }
+   */
 }
 
 void workload::make_read_for_write_operation(shard_id_t rg_id,
-                                             table_id_t table, uint32_t key, per_terminal *td) {
+                                             table_id_t table, uint64_t key, per_terminal *td) {
   tx_operation *op = mutable_request(td).add_operations();
   if (op == nullptr) {
     return;
@@ -506,7 +600,7 @@ void workload::make_read_for_write_operation(shard_id_t rg_id,
 }
 
 void workload::make_read_operation(shard_id_t rg_id,
-                                   table_id_t table, uint32_t key, per_terminal *td) {
+                                   table_id_t table, uint64_t key, per_terminal *td) {
   tx_operation *op = mutable_request(td).add_operations();
   if (op == nullptr) {
     return;
@@ -519,7 +613,7 @@ void workload::make_read_operation(shard_id_t rg_id,
 }
 
 void workload::make_update_operation(shard_id_t rg_id,
-                                     table_id_t table, uint32_t key,
+                                     table_id_t table, uint64_t key,
                                      tuple_pb &tuple,
                                      per_terminal *td) {
   tx_operation *op = mutable_request(td).add_operations();
@@ -534,7 +628,7 @@ void workload::make_update_operation(shard_id_t rg_id,
 }
 
 void workload::make_insert_operation(shard_id_t rg_id,
-                                     table_id_t table, uint32_t key,
+                                     table_id_t table, uint64_t key,
                                      tuple_pb &tuple, per_terminal *td) {
   tx_operation *op = mutable_request(td).add_operations();
   if (op == nullptr) {
@@ -571,39 +665,52 @@ std::vector<tx_request> &workload::get_tx_request(per_terminal *td) {
   return td->requests_;
 }
 
-
 bench_result workload::tpm_statistic::compute_bench_result(uint32_t num_term) {
   bench_result res;
-  if (duration.total_milliseconds() != 0 && num_tx != 0) {
+  if (uint64_t(to_milliseconds(duration)) != 0 && num_tx != 0) {
     double tps = double(num_commit) /
-        (double(duration.total_microseconds()) / 1000000.0) *
+        (to_seconds(duration)) *
         num_term;
     double ar = double(num_abort) / double(num_tx);
     std::stringstream latency_msg;
+    std::stringstream violate_msg;
     if (num_commit != 0) {
-      double latency =  commit_duration.total_milliseconds() / num_commit;
-      latency_msg <<  ", latency: " << latency << "ms";
+      double latency = to_milliseconds(commit_duration) / num_commit;
+      latency_msg << ", latency: " << latency << "ms";
       res.set_latency(latency);
-      res.set_latency_read(duration_read.total_milliseconds() / num_commit);
-      res.set_latency_append(duration_append_log.total_milliseconds() / num_part);
-      res.set_latency_replicate(duration_replicate_log.total_milliseconds() / num_part);
-      res.set_latency_lock_wait(duration_lock_wait.total_milliseconds() / num_part);
-      res.set_latency_part(duration_part.total_milliseconds() / num_part);
-    } else {
-
+      if (to_milliseconds(duration_read_dsb) > to_milliseconds(duration_read)) {
+        BOOST_ASSERT(false);
+      }
+      res.set_latency_read(to_milliseconds(duration_read) / num_commit);
+      res.set_latency_read_dsb(to_milliseconds(duration_read_dsb) / num_commit);
+      if (num_part != 0) {
+        res.set_latency_append(to_milliseconds(duration_append_log) / num_part);
+        res.set_latency_replicate(to_milliseconds(duration_replicate_log) / num_part);
+        res.set_latency_lock_wait(to_milliseconds(duration_lock_wait) / num_part);
+        res.set_latency_part(to_milliseconds(duration_part) / num_part);
+      }
     }
-    BOOST_LOG_TRIVIAL(info) << "TPS : " << tps << ", ABORT RATE : " << ar << latency_msg.str();
+
+    BOOST_LOG_TRIVIAL(info) << "TPS : " << tps << ", ABORT RATE : " << ar
+                            << latency_msg.str() << " " << violate_msg.str();
 
     res.set_abort(ar);
     res.set_tpm(tps * 60);
+  } else {
+    BOOST_LOG_TRIVIAL(info) << "TPS : 0";
   }
   return res;
 }
+
 void workload::output_final_result() {
   tpm_statistic r;
   uint32_t num_term = terminal_data_.size();
+
   for (uint32_t i = 0; i != result_.size(); ++i) {
-    r.add(result_[i]);
+    // remove the first ten percent and the last ten percent
+    if (i >= result_.size() * 0.1 && i <= result_.size() * 0.9) {
+      r.add(result_[i]);
+    }
   }
 
   bench_result res = r.compute_bench_result(num_term);
@@ -624,12 +731,16 @@ void workload::per_terminal::reset_database_connection() {
 
 void workload::per_terminal::update(uint32_t commit, uint32_t abort, uint32_t total,
                                     uint32_t num_part,
-                                    time_duration commit_duration,
-                                    time_duration duration_append_log,
-                                    time_duration duration_replicate_log,
-                                    time_duration duration_read,
-                                    time_duration duration_lock_wait,
-                                    time_duration duration_part
+                                    std::chrono::nanoseconds commit_duration,
+                                    std::chrono::nanoseconds duration_append_log,
+                                    std::chrono::nanoseconds duration_replicate_log,
+                                    std::chrono::nanoseconds duration_read,
+                                    std::chrono::nanoseconds duration_read_dsb,
+                                    std::chrono::nanoseconds duration_lock_wait,
+                                    std::chrono::nanoseconds duration_part,
+                                    uint32_t num_lock,
+                                    uint32_t num_read_violate,
+                                    uint32_t num_write_violate
 
 ) {
   std::scoped_lock l(mutex_);
@@ -640,9 +751,13 @@ void workload::per_terminal::update(uint32_t commit, uint32_t abort, uint32_t to
   result_.duration_append_log += duration_append_log;
   result_.duration_replicate_log += duration_replicate_log;
   result_.duration_read += duration_read;
+  result_.duration_read_dsb += duration_read_dsb;
   result_.duration_lock_wait += duration_lock_wait;
   result_.duration_part += duration_part;
   result_.num_part += num_part;
+  result_.num_lock += num_lock;
+  result_.num_write_violate += num_write_violate;
+  result_.num_read_violate += num_read_violate;
 }
 
 workload::tpm_statistic workload::per_terminal::get_result() {
@@ -652,23 +767,25 @@ workload::tpm_statistic workload::per_terminal::get_result() {
   return r;
 }
 void workload::create_tx_request(per_terminal *td) {
-  td->requests_.emplace_back(tx_request());
-  mutable_request(td).set_oneshot(oneshot_);
-  mutable_request(td).set_client_request(true);
+  tx_request req;
+  req.set_oneshot(oneshot_);
+  req.set_client_request(true);
+  req.set_terminal_id(td->terminal_id_);
+  td->requests_.emplace_back(req);
 }
 
 void workload::output_result() {
   while (true) {
-    ptime start = microsec_clock::local_time();
+    auto start = std::chrono::steady_clock::now();
     boost::this_thread::sleep_for(boost::chrono::milliseconds(1000));
     tpm_statistic total_result;
     size_t num_term_done = 0;
-    ptime end = microsec_clock::local_time();
+    auto end = std::chrono::steady_clock::now();
 
     for (auto i = terminal_data_.begin(); i != terminal_data_.end(); i++) {
       per_terminal &pt = *i->second;
       tpm_statistic r = pt.get_result();
-      time_duration duration = end - start;
+      auto duration = end - start;
       r.duration = duration;
       total_result.add(r);
       num_term_done += pt.done_ ? 1 : 0;
@@ -676,13 +793,31 @@ void workload::output_result() {
     if (num_term_done == terminal_data_.size()) {
       break;
     }
-    if (result_.size() >= conf_.get_tpcc_config().num_output_result()) {
+    if (result_.size() >= conf_.get_tpcc_config().num_output_result() * 1.2) {
       stopped_.store(true);
       continue;
     }
     total_result.compute_bench_result(conf_.num_terminal());
+    if (total_result.num_commit > 0) {
+      prefix_non_zero_tps_++;
+      prefix_zero_tps_ = 0;
+    } else {
+      prefix_zero_tps_++;
+      prefix_non_zero_tps_ = 0;
+    }
+    if (enable_calculate_) {
+      if (prefix_zero_tps_ > PREFIX_NUM) {
+        enable_calculate_ = false;
+      }
+    } else {
+      if (prefix_non_zero_tps_ > PREFIX_NUM) {
+        enable_calculate_ = true;
+      }
+    }
 
-    result_.push_back(total_result);
+    if (enable_calculate_) {
+      result_.push_back(total_result);
+    }
   }
   output_final_result();
 }

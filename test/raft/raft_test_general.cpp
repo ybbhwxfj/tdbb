@@ -29,7 +29,7 @@ void raft_test_general() {
   uint64_t max_xid = 0;
 
   for (; xid < NUM_APPEND_LOGS;) {
-    for (const auto &n: ctx->nodes_) {
+    for (const auto &n : ctx->nodes_) {
       ptr<state_machine> sm = n.second->get_state_machine();
       sm_status s = sm->status();
       if (s.state == RAFT_STATE_LEADER) {
@@ -55,7 +55,7 @@ void raft_test_general() {
   az_ids.erase(TO_AZ_ID(leader_node));
   az_id_t leader_az = *az_ids.rbegin();
   while (!transfer_success) {
-    for (const auto &n: ctx->nodes_) {
+    for (const auto &n : ctx->nodes_) {
       node_id_t node_id = n.first;
       ptr<state_machine> sm = n.second->get_state_machine();
       sm_status s = sm->status();
@@ -72,7 +72,7 @@ void raft_test_general() {
   }
 
   for (; xid < NUM_APPEND_LOGS * 2;) {
-    for (const auto &n: ctx->nodes_) {
+    for (const auto &n : ctx->nodes_) {
       ptr<state_machine> sm = n.second->get_state_machine();
       sm_status s = sm->status();
       if (s.state == RAFT_STATE_LEADER) {

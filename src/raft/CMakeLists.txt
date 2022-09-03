@@ -1,4 +1,4 @@
 add_library(raft
         state_machine.cpp
-        archieved.cpp
         )
+add_dependencies(raft proto)

@@ -44,7 +44,7 @@ raft_node::raft_node(const config &conf, const std::string &case_name) :
       BOOST_CHECK(ok_json_to_pb);
     } else {
       state_ = log.state();
-      for (const auto &l: log.entries()) {
+      for (const auto &l : log.entries()) {
         BOOST_ASSERT(l.index() > 0);
         log_.insert(
             std::make_pair(l.index(), std::make_shared<log_entry>(l)));
@@ -55,7 +55,7 @@ raft_node::raft_node(const config &conf, const std::string &case_name) :
 
 void raft_node::start(raft_test_context *ctx) {
   service_ = std::make_shared<net_service>(conf_);
-  server_ = std::make_shared<sock_server>(conf_, service_.get());
+  server_ = std::make_shared<sock_server>(conf_, service_);
   ctx->commit_xid_[node_id_] = 0;
   fn_on_become_leader fn_leader = [this, ctx](uint64_t term) {
     test_become_leader(node_id_, ctx, term);
@@ -72,16 +72,27 @@ void raft_node::start(raft_test_context *ctx) {
     }
   };
 
-  state_machine_ = std::make_shared<state_machine>(conf_, service_.get(), fn_leader, fn_follower,
-                                                   fn_commit,
-                                                   l);
+  state_machine_ = std::make_shared<state_machine>(
+      conf_,
+      service_,
+      fn_leader,
+      fn_follower,
+      fn_commit,
+      l);
 
   message_handler raft_message_handler = [this](
       ptr<connection>,
       message_type id,
-      byte_buffer &buffer
+      byte_buffer &buffer,
+      msg_hdr *
   ) -> result<void> {
-    state_machine_->on_recv_message(id, buffer);
+    ptr<byte_buffer> buf(new byte_buffer(buffer));
+    boost::asio::post(
+        state_machine_->get_strand(),
+        [this, id, buf] {
+          state_machine_->on_recv_message(id, *buf);
+        });
+
     return outcome::success();
   };
 
@@ -91,14 +102,14 @@ void raft_node::start(raft_test_context *ctx) {
 }
 
 void raft_node::commit_log(const std::vector<ptr<log_entry>> &log, const log_write_option &) {
-  for (auto const &l: log) {
+  for (auto const &l : log) {
     committed_log_[l->index()] = l;
   }
 }
 
 void raft_node::write_log(const std::vector<ptr<log_entry>> &log, const log_write_option &) {
   std::scoped_lock lock(mutex_);
-  for (const auto &l: log) {
+  for (const auto &l : log) {
     // BOOST_LOG_TRIVIAL(trace) << id_2_name(node_id_) << " write log index: " << l->index();
     auto i = log_.find(l->index());
     if (i == log_.end()) {
@@ -124,7 +135,7 @@ void raft_node::retrieve_state(fn_state fn) {
 
 void raft_node::retrieve_log(fn_tx_log fn) {
   std::scoped_lock lock(mutex_);
-  for (const auto &kv: log_) {
+  for (const auto &kv : log_) {
     std::string s = kv.second->SerializeAsString();
     ::slice v(s);
     log_index_t k(kv.second->index());

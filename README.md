@@ -3,7 +3,6 @@
 This repo is the source code of our research paper *Building Blocks for Cloud Transactional DBMS*(To appear).
 This paper aims to simplify cloud transactional DBMS development.
 
-
 # dependency
 
 ## on ubuntu 20.04
@@ -24,8 +23,6 @@ This paper aims to simplify cloud transactional DBMS development.
         liblz4-dev \
         libgflags-dev \
         liburing-dev \
-        git \
-        vim \
         openssh-client \
         openssh-server \
         openssh-sftp-server \
@@ -34,25 +31,24 @@ This paper aims to simplify cloud transactional DBMS development.
         net-tools \
         iputils-ping \
         iproute2 \
-        rsync \
-        gdb
-
+        rsync
 
 ## install third party library, boost, rocksdb, tkrzw, protobuf
-    ./script/build_third_party.sh
+
+    ./script/build_third_party.sh -i [INSTALL_PREFIX_PATH]
+
+## build
+
+    ./script/build.sh
 
 # configure
 
 ## configure max file descriptor
 
-add these lines to /etc/security/limits.conf
+Increase maximum opened file numbers. Add these lines to /etc/security/limits.conf
 
 ```
-<user>    hard    nofile  50000
-<user>    soft    nofile  50000
+<user>    hard    nofile  <integer value>
+<user>    soft    nofile  <integer value>
 
 ```
-
-## build
-
-    ./script/build.sh

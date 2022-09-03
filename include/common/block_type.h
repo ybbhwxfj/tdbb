@@ -8,7 +8,7 @@ typedef std::string block_type_t;
 #define RLB "RLB"
 #define DSB "DSB"
 #define PNB "PNB"
-#define CLIENT "CLINET"
+#define CLIENT "CLIENT"
 
 const block_type_t BLOCK_CCB = CCB;
 const block_type_t BLOCK_RLB = RLB;
@@ -50,7 +50,7 @@ inline block_type_t node_type_id_2_name(block_type_id_t id) {
 
 inline std::string block_type_list_2_string(const std::set<block_type_t> &l) {
   std::string r = "";
-  for (block_type_t s: l) {
+  for (block_type_t s : l) {
     if (!s.empty()) {
       r += s[0];
     }

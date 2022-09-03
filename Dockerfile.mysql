@@ -1,0 +1,65 @@
+FROM mysql-build:latest AS mysql-tpcc
+
+ENV DEBIAN_FRONTEND noninteractive
+RUN apt-get install -y sudo
+
+# add our user and group first to make sure their IDs get assigned consistently, regardless of whatever dependencies get added
+RUN userdel -r -f mysql
+RUN groupadd -r -f mysql
+RUN groupadd -r -f mysql && useradd -r  -m -g mysql mysql
+
+RUN echo "root:root" | chpasswd
+RUN echo "mysql:mysql" | chpasswd
+RUN rm -rf /var/log/mysql
+RUN mkdir -p /var/log/mysql
+RUN chown mysql:mysql /var/log/mysql
+RUN usermod -aG sudo mysql
+
+RUN echo 'Asia/Shanghai' > /etc/timezone
+RUN ln -s -f /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
+
+
+RUN echo 'PATH=$PATH:/home/mysql/block-db/bin' > /etc/profile
+RUN echo 'kernel.yama.ptrace_scope = 0' > /etc/sysctl.d/10-ptrace.conf
+
+RUN rm -rf /root/.ssh
+RUN ssh-keygen -q -t rsa -N '' -f /root/.ssh/id_rsa
+RUN cat /root/.ssh/id_rsa.pub > /root/.ssh/authorized_keys
+
+
+USER mysql
+WORKDIR /home/mysql
+
+RUN rm -rf /home/mysql/.ssh
+RUN ssh-keygen -q -t rsa -N '' -f /home/mysql/.ssh/id_rsa
+RUN cat /home/mysql/.ssh/id_rsa.pub > /home/mysql/.ssh/authorized_keys
+
+RUN rm -rf /home/mysql/*
+
+COPY --chown=mysql:mysql . /home/mysql/block-db
+
+RUN cd /home/mysql/block-db/mysql/src && \
+    rm -rf build && \
+    mkdir -p build && \
+    cd build && \
+    cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo .. && \
+    make -j
+
+USER root
+RUN cp /home/mysql/block-db/bin/* /usr/bin
+
+
+USER mysql
+
+RUN cp /home/mysql/block-db/conf/docker.node.conf.sdb.b.json /home/mysql/block-db/conf/node.mysql.conf.json
+RUN echo '{\n\
+    "user": "mysql",\n\
+    "password": "mysql"\n\
+}' > /home/mysql/block-db/conf/user.conf.json
+COPY mysql/entrypoint.sh /home/mysql/entrypoint.sh
+
+ENTRYPOINT /home/mysql/entrypoint.sh
+
+
+
+

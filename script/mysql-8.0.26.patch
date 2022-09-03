@@ -1,0 +1,22 @@
+diff -Naru mysql-8.0.26/plugin/group_replication/libmysqlgcs/src/bindings/xcom/gcs_xcom_utils.cc mysql-8.0.26/plugin/group_replication/libmysqlgcs/src/bindings/xcom/gcs_xcom_utils.cc
+--- mysql-8.0.26/plugin/group_replication/libmysqlgcs/src/bindings/xcom/gcs_xcom_utils.cc	2021-07-01 15:53:49.000000000 +0800
++++ mysql-8.0.26/plugin/group_replication/libmysqlgcs/src/bindings/xcom/gcs_xcom_utils.cc	2022-02-18 21:27:51.226578660 +0800
+@@ -468,12 +468,12 @@
+     }
+ 
+     if (!matches_local_ip) {
+-      MYSQL_GCS_LOG_ERROR(
+-          "There is no local IP address matching the one "
+-          "configured for the local node ("
+-          << *local_node_str << ").");
+-      error = GCS_NOK;
+-      goto end;
++      //MYSQL_GCS_LOG_ERROR(
++      //    "There is no local IP address matching the one "
++      //    "configured for the local node ("
++      //    << *local_node_str << ").");
++      //error = GCS_NOK;
++      //goto end;
+     }
+   }
+ 

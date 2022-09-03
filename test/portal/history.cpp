@@ -43,27 +43,27 @@ bool history::is_serializable() {
   tx_wait_set set;
   std::unordered_map<key, std::vector<tx_op>, key_hash, key_equal> table;
   std::set<xid_t> committed_;
-  for (const tx_op o: history_) {
+  for (const tx_op o : history_) {
     if (o.cmd_ == TX_CMD_RM_COMMIT || o.cmd_ == TX_CMD_TM_COMMIT) {
       committed_.insert(o.xid_);
     }
   }
   erase_if(history_, [committed_](const tx_op &op) {
-    // remove all non access operations and not committed tx operations
+    // remove all non access operations and not committed tx_rm operations
     return (op.cmd_ != TX_CMD_RM_READ || op.cmd_ == TX_CMD_RM_WRITE)
         || not committed_.contains(op.xid_);
   });
 
   // left only committed read/write
   // insert into table
-  for (const tx_op o: history_) {
+  for (const tx_op o : history_) {
     key k(o.table_id_, o.tuple_id_);
     table[k].push_back(o);
   }
 
-  for (std::pair<const key, std::vector<tx_op>> &p: table) {
+  for (std::pair<const key, std::vector<tx_op>> &p : table) {
     tx_op *prev_op = nullptr;
-    for (tx_op &o: p.second) {
+    for (tx_op &o : p.second) {
       if (prev_op) {
         if (is_conflict(o, *prev_op)) {
           ptr<tx_wait> w(new tx_wait(prev_op->xid_));
@@ -77,7 +77,7 @@ bool history::is_serializable() {
   path.merge_dependency_set(set);
   auto find_circle = [](const std::vector<xid_t> &circle) {
     BOOST_LOG_TRIVIAL(info) << "find non-serializable";
-    for (auto x: circle) {
+    for (auto x : circle) {
       BOOST_LOG_TRIVIAL(info) << "    --> " << x;
     }
   };

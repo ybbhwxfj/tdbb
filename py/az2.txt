@@ -1,0 +1,201 @@
+跳转至主内容
+工作台
+费用
+工单
+ICP 备案
+支持
+Elastic Compute Service
+
+    Overview
+    Events
+    Tags
+    Troubleshooting
+    ECS Cloud Assistant
+    Applications
+    Instances & Images
+        Instances
+        Images
+        Elastic Container
+        Instance
+        Dedicated Hosts
+        cloudBox
+        Super Computing Clusters
+        Reserved Instances
+        Resource Assurance
+        Savings Plan
+    Network & Security
+        Security Groups
+        ENIs
+        SSH Key Pairs
+        Virtual Private Clou...
+        Prefix Lists
+    Storage & Snapshots
+        Disks
+        Snapshots
+        Storage Capacity Units
+        Dedicated Block Stor...
+        NAS
+    Deployment & Elasticity
+        Launch Templates
+        Deployment Sets
+        Resource Orchestration
+        Service
+        Auto Provisioning
+        Auto Scaling
+        Image Builder
+        Server Migration Cen...
+    Maintenance & Monitoring
+        Operation Orchestration
+        Service
+        ECS Cloud Assistant
+        Troubleshooting
+        Migration Plan
+        Operation Logs
+        Tasks
+        CloudMonitor
+    Recommended Services
+
+let's go
+Elastic Compute ServiceInstances
+Instances
+	Instance ID/Name	Tag		Monitoring
+Zone
+	IP Address
+Status
+
+Network Type
+	Specifications
+Billing Method
+	Actions
+
+
+i-2vccmwdmvriz4ces0hr5
+
+launch-advisor-20220224
+
+
+
+
+	Chengdu Zone B
+
+47.108.162.132(Public)
+
+172.24.195.112(Private)
+	Running
+
+VPC
+
+
+8 vCPU 32 GiB （I/O Optimized）
+
+ecs.g6.2xlarge   50Mbps (Peak Value)
+
+
+Pay-As-You-Go-Preemptible Instance
+
+February 24, 2022, 20:10 Created
+
+Manage |Connect
+|More
+
+
+i-2vc5bu6hb90911za0w5z
+
+launch-advisor-20220222003
+
+
+
+
+
+	Chengdu Zone B
+
+47.108.149.193(Public)
+
+172.24.195.111(Private)
+	Running
+
+VPC
+
+
+8 vCPU 32 GiB （I/O Optimized）
+
+ecs.g6.2xlarge   50Mbps (Peak Value)
+
+
+Pay-As-You-Go-Preemptible Instance
+
+February 24, 2022, 19:11 Created
+
+Manage |Connect
+|More
+
+
+i-2vc5bu6hb90911za0w5y
+
+launch-advisor-20220222002
+
+
+
+
+	Chengdu Zone B
+
+47.108.255.136(Public)
+
+172.24.195.110(Private)
+	Running
+
+VPC
+
+
+8 vCPU 32 GiB （I/O Optimized）
+
+ecs.g6.2xlarge   50Mbps (Peak Value)
+
+
+Pay-As-You-Go-Preemptible Instance
+
+February 24, 2022, 19:11 Created
+
+Manage |Connect
+|More
+
+
+i-2vc5bu6hb90911za0w5x
+
+launch-advisor-20220222001
+
+
+
+
+	Chengdu Zone B
+
+47.109.21.119(Public)
+
+172.24.195.109(Private)
+	Running
+
+VPC
+
+
+8 vCPU 32 GiB （I/O Optimized）
+
+ecs.g6.2xlarge   50Mbps (Peak Value)
+
+
+Pay-As-You-Go-Preemptible Instance
+
+February 24, 2022, 19:11 Created
+
+Manage |Connect
+|More
+
+Total: 4 item(s), Per Page:
+item(s)
+
+    «
+    ‹
+    1
+    ›
+    »
+
+new

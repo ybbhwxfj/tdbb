@@ -1,7 +1,7 @@
 #include "common/table_desc.h"
 
 void table_desc::from_json(boost::json::object &obj) {
-  table_name_ = boost::json::value_to<std::string>(obj["TableName"]).c_str();
+  table_name_ = boost::json::value_to<std::string>(obj["TableName"]);
   boost::json::array &a = obj["Column"].as_array();
   column_id_t id = 0;
   for (auto i = a.begin(); i != a.end(); i++, id++) {

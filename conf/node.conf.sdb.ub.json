@@ -1,0 +1,125 @@
+{
+  "node_server_list": [
+    {
+      "zone_name": "az1",
+      "shard_name": "s1",
+      "node_name": "bdb-s1-az1-rlb",
+      "address": "192.168.1.1",
+      "private_address": "192.168.1.1",
+      "port": 8002,
+      "block_type": [
+        "RLB"
+      ]
+    },
+    {
+      "zone_name": "az1",
+      "shard_name": "s1",
+      "node_name": "bdb-s1-az1-dsb",
+      "address": "192.168.1.2",
+      "private_address": "192.168.1.2",
+      "port": 8003,
+      "block_type": [
+        "DSB"
+      ]
+    },
+    {
+      "zone_name": "az1",
+      "shard_name": "s1",
+      "node_name": "bdb-s1-az1-ccb",
+      "address": "192.168.1.3",
+      "private_address": "192.168.1.3",
+      "port": 8001,
+      "block_type": [
+        "CCB"
+      ]
+    },
+    {
+      "zone_name": "az2",
+      "shard_name": "s1",
+      "node_name": "bdb-s1-az2-rlb",
+      "address": "192.168.2.1",
+      "private_address": "192.168.2.1",
+      "port": 8002,
+      "block_type": [
+        "RLB"
+      ]
+    },
+    {
+      "zone_name": "az2",
+      "shard_name": "s1",
+      "node_name": "bdb-s1-az2-dsb",
+      "address": "192.168.2.2",
+      "private_address": "192.168.2.2",
+      "port": 8003,
+      "block_type": [
+        "DSB"
+      ]
+    },
+    {
+      "zone_name": "az2",
+      "shard_name": "s1",
+      "node_name": "bdb-s1-az2-ccb",
+      "address": "192.168.2.3",
+      "private_address": "192.168.2.3",
+      "port": 8001,
+      "block_type": [
+        "CCB"
+      ]
+    },
+    {
+      "zone_name": "az3",
+      "shard_name": "s1",
+      "node_name": "bdb-s1-az3-rlb",
+      "address": "192.168.3.1",
+      "private_address": "192.168.3.1",
+      "port": 8002,
+      "block_type": [
+        "RLB"
+      ]
+    },
+    {
+      "zone_name": "az3",
+      "shard_name": "s1",
+      "node_name": "bdb-s1-az3-dsb",
+      "address": "192.168.3.2",
+      "private_address": "192.168.3.2",
+      "port": 8003,
+      "block_type": [
+        "DSB"
+      ]
+    },
+    {
+      "zone_name": "az3",
+      "shard_name": "s1",
+      "node_name": "bdb-s1-az3-ccb",
+      "address": "192.168.3.3",
+      "private_address": "192.168.3.3",
+      "port": 8001,
+      "block_type": [
+        "CCB"
+      ]
+    }
+  ],
+  "node_client": {
+    "zone_name": "az3",
+    "shard_name": "s0",
+    "node_name": "bdb-client-az3",
+    "address": "192.168.3.100",
+    "private_address": "192.168.3.100",
+    "port": 8000,
+    "block_type": [
+      "CLIENT"
+    ]
+  },
+  "node_panel": {
+    "zone_name": "az3",
+    "shard_name": "s0",
+    "node_name": "bdb-pnb-az3",
+    "address": "192.168.3.101",
+    "private_address": "192.168.3.101",
+    "port": 8008,
+    "block_type": [
+      "PNB"
+    ]
+  }
+}

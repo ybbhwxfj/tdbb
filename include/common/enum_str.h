@@ -1,4 +1,5 @@
 #pragma once
+
 #include <iostream>
 #include <sstream>
 #include <string>
@@ -22,11 +23,14 @@ struct enum_strings {
 template<typename T>
 struct enum_ref_holder {
   T &enum_value;
+
   enum_ref_holder(T &enumVal) : enum_value(enumVal) {}
 };
+
 template<typename T>
 struct enum_const_ref_holder {
   T const &enum_value;
+
   enum_const_ref_holder(T const &enumVal) : enum_value(enumVal) {}
 };
 

@@ -47,7 +47,8 @@ inline void init_config(config &c, std::string node_name, std::string path) {
   c.set_register_node(node_name);
   std::string json_path = schema_json_path();
 
-  c.get_test_config().set_wan_latency_ms(50);
+  c.get_test_config().set_wan_latency_ms(TEST_WAN_LATENCY_MS);
+  c.get_test_config().set_cached_tuple_percentage(TEST_CACHED_TUPLE_PERCENTAGE);
   c.get_test_config().set_label("test-block-db");
   c.set_schema_path(json_path);
 
@@ -56,14 +57,15 @@ inline void init_config(config &c, std::string node_name, std::string path) {
 
   tpcc_config &tc = c.mutable_tpcc_config();
   tc.set_num_warehouse(NUM_WAREHOUSE);
-  tc.set_num_order_item(NUM_ORDER_ITEM);
-  tc.set_num_district(NUM_DISTRICT);
+  tc.set_num_district_per_warehouse(NUM_DISTRICT_PER_WAREHOUSE);
   tc.set_num_item(NUM_ITEM);
-  tc.set_num_order_initalize(NUM_ORDER_INITIALIZE);
-  tc.set_num_customer(NUM_CUSTOMER);
+  tc.set_num_order_initialize(NUM_ORDER_INITIALIZE);
+  tc.set_num_customer_per_district(NUM_CUSTOMER_PER_DISTRICT);
   tc.set_num_max_order_line(NUM_MAX_ORDER_LINE);
   tc.set_num_terminal(NUM_TERMINAL);
-  tc.set_num_new_order(NUM_NEW_ORDER_TX);
+  tc.set_num_new_order(NUM_TRANSACTION);
+  tc.set_percent_hot_row(PERCENT_HOT_ROW);
+  tc.set_hot_item_num(HOT_ROW_NUM);
   tc.set_percent_non_exist_item(PERCENT_NON_EXIST_ITEM);
   if (block_db_type() == DB_S) {
     tc.set_percent_distributed(0.0);
@@ -132,10 +134,10 @@ inline std::vector<config> generate_config(const config_option &option) {
     iter->second = ++priority;
   }
 
-  for (node_config &nc: nc_list) {
+  for (node_config &nc : nc_list) {
     nc.set_priority(az2priority[nc.az_name()]);
   }
-  for (auto &c: vec_config) {
+  for (auto &c : vec_config) {
     std::copy(nc_list.begin(), nc_list.end(),
               std::back_inserter(c.mutable_node_config_list()));
   }
@@ -171,7 +173,7 @@ inline std::vector<config> generate_config(const config_option &option) {
     vec_config.push_back(cli_conf);
   }
 
-  for (auto &c: vec_config) {
+  for (auto &c : vec_config) {
     c.mutable_client_config() = node_cli_conf;
     c.panel_config() = node_panel_conf;
     BOOST_ASSERT(c.client_config().node_name() == "client");
@@ -185,7 +187,7 @@ inline std::vector<config> generate_config(const config_option &option) {
 inline std::vector<std::string> generate_config_json_file(const config_option &option) {
   std::vector<std::string> json_path;
   std::vector<config> vec_config = generate_config(option);
-  for (auto &c: vec_config) {
+  for (auto &c : vec_config) {
     boost::json::object j = c.to_json();
     std::stringstream ssm;
     ssm << j;

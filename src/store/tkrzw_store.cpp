@@ -64,40 +64,40 @@ tkrzw_store::~tkrzw_store() {
 }
 
 result<void> tkrzw_store::replay(const replay_to_dsb_request msg) {
-  for (const tx_log &log: msg.logs()) {
-    for (const tx_operation &op: log.operations()) {
+  for (const tx_log &log : msg.logs()) {
+    for (const tx_operation &op : log.operations()) {
       switch (op.op_type()) {
-      case tx_op_type::TX_OP_DELETE: {
-        table_id_t table_id = op.tuple_row().table_id();
-        tuple_id_t key = op.tuple_row().tuple_id();
-        if (table_id >= MAX_TABLES) {
-          // TODO ...
-        }
+        case tx_op_type::TX_OP_DELETE: {
+          table_id_t table_id = op.tuple_row().table_id();
+          tuple_id_t key = op.tuple_row().tuple_id();
+          if (table_id >= MAX_TABLES) {
+            // TODO ...
+          }
 
-        tkrzw::Status status = dbm_[table_id]->Remove(tupleid2binary(key));
-        if (!status.IsOK()) {
-          return outcome::failure(status_to_ec(status));
+          tkrzw::Status status = dbm_[table_id]->Remove(tupleid2binary(key));
+          if (!status.IsOK()) {
+            return outcome::failure(status_to_ec(status));
+          }
         }
-      }
-        break;
-      case tx_op_type::TX_OP_INSERT:
-      case tx_op_type::TX_OP_UPDATE: {
-        table_id_t table_id = op.tuple_row().table_id();
-        tuple_id_t key = op.tuple_row().tuple_id();
-        if (table_id >= MAX_TABLES) {
-          // TODO ...
-        }
+          break;
+        case tx_op_type::TX_OP_INSERT:
+        case tx_op_type::TX_OP_UPDATE: {
+          table_id_t table_id = op.tuple_row().table_id();
+          tuple_id_t key = op.tuple_row().tuple_id();
+          if (table_id >= MAX_TABLES) {
+            // TODO ...
+          }
 
-        bool overwrite = op.op_type() == TX_OP_UPDATE;
-        tkrzw::Status status =
-            dbm_[table_id]->Set(tupleid2binary(key),
-                                pbtuple_to_binary(op.tuple_row().tuple()), overwrite);
-        if (!status.IsOK()) {
-          return outcome::failure(status_to_ec(status));
+          bool overwrite = op.op_type() == TX_OP_UPDATE;
+          tkrzw::Status status =
+              dbm_[table_id]->Set(tupleid2binary(key),
+                                  pbtuple_to_binary(op.tuple_row().tuple()), overwrite);
+          if (!status.IsOK()) {
+            return outcome::failure(status_to_ec(status));
+          }
         }
-      }
-        break;
-      default:break;
+          break;
+        default:break;
       }
     }
   }
@@ -110,12 +110,14 @@ void tkrzw_store::close() {
   }
 }
 
-result<void> tkrzw_store::put(table_id_t table_id, tuple_id_t key,
-                              const tuple_pb &tuple) {
+result<void> tkrzw_store::put(
+    table_id_t table_id,
+    tuple_id_t key,
+    tuple_pb &&tuple) {
   if (table_id >= MAX_TABLES) {
     return outcome::failure(EC::EC_UNKNOWN_TABLE_ID);
   }
-  std::string s((const char *)&key, sizeof(key));
+  std::string s((const char *) &key, sizeof(key));
   tkrzw::Status status = dbm_[table_id]->Set(s, pbtuple_to_binary(tuple), true);
   EC ec = status_to_ec(status);
   if (!status.IsOK()) {
@@ -136,7 +138,7 @@ result<ptr<tuple_pb>> tkrzw_store::get(table_id_t table_id, tuple_id_t key) {
   }
 
   std::string tuple;
-  std::string s((const char *)&key, sizeof(key));
+  std::string s((const char *) &key, sizeof(key));
   tkrzw::Status status = dbm_[table_id]->Get(s, &tuple);
   EC ec = status_to_ec(status);
   if (ec == EC::EC_NOT_FOUND_ERROR) {

@@ -1,4 +1,5 @@
 #pragma once
+
 #include <string>
 #include "common/enum_str.h"
 
