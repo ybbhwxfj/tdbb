@@ -10,12 +10,12 @@ using boost::asio::io_service;
 using std::vector;
 
 class ThreadPool {
- private:
+private:
   io_service io_service_;
   thread_group thread_group_;
   vector<boost::thread *> service_thread_;
 
- public:
+public:
   ThreadPool() { this->join(); }
 
   ~ThreadPool() {}
@@ -26,6 +26,6 @@ class ThreadPool {
 
   io_service &service() { return io_service_; }
 
- private:
+private:
   void process();
 };

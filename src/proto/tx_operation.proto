@@ -12,12 +12,10 @@ enum tx_op_type {
   TX_OP_ACCESS_END = 6;
 };
 
-
-
 message tx_operation {
   tx_op_type op_type = 1;
   uint64 xid = 2;
-  uint32 rg_id = 3;
+  uint32 sd_id = 3;
   uint32 operation_id = 4;
   uint32 index = 5;
   uint32 term = 6;

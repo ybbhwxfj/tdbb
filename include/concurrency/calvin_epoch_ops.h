@@ -1,9 +1,13 @@
 #pragma once
 
-#include "proto/proto.h"
+#include "common/db_type.h"
+
+#ifdef DB_TYPE_CALVIN
+
 #include "common/id.h"
-#include <vector>
+#include "proto/proto.h"
 #include <set>
+#include <vector>
 
 struct calvin_epoch_ops {
   uint64_t epoch_;
@@ -11,3 +15,5 @@ struct calvin_epoch_ops {
   std::set<node_id_t> node_ids_;
   std::vector<ptr<tx_request>> reqs_;
 };
+
+#endif

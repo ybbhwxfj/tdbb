@@ -7,10 +7,11 @@ message tx_request {
   uint64 xid = 2;
   uint32 source = 3;
   uint32 dest = 4;
-  bool oneshot = 5;
-  bool distributed = 6;
-  bool client_request = 7;
-  repeated tx_operation operations = 8;
+  bool read_only = 5;
+  bool oneshot = 6;
+  bool distributed = 7;
+  bool client_request = 8;
+  repeated tx_operation operations = 9;
 }
 
 message tx_response {
@@ -78,4 +79,10 @@ message tx_tm_end {
   uint64 xid = 1;
   uint32 source_node = 2;
   uint32 dest_node = 3;
+}
+
+message tx_victim {
+  uint32 source = 1;
+  uint32 dest = 2;
+  uint64 xid = 3;
 }

@@ -32,24 +32,24 @@ long count_ware;
 int fd, seed;
 
 int particle_flg = 0; /* "1" means particle mode */
-int part_no = 0; /* 1:items 2:warehouse 3:customer 4:orders */
+int part_no = 0;      /* 1:items 2:warehouse 3:customer 4:orders */
 long min_ware = 1;
 long max_ware;
 
 /* Global Variables */
 int i;
-int option_debug = 0;    /* 1 if generating debug output    */
-int is_local = 1;           /* "1" mean local */
+int option_debug = 0; /* 1 if generating debug output    */
+int is_local = 1;     /* "1" mean local */
 
 #define DB_STRING_MAX 51
 
 #include "parse_port.h"
 
-int
-try_stmt_execute(MYSQL_STMT *mysql_stmt) {
+int try_stmt_execute(MYSQL_STMT *mysql_stmt) {
   int ret = mysql_stmt_execute(mysql_stmt);
   if (ret) {
-    printf("\n%d, %s, %s\n", mysql_errno(mysql), mysql_sqlstate(mysql), mysql_error(mysql));
+    printf("\n%d, %s, %s\n", mysql_errno(mysql), mysql_sqlstate(mysql),
+           mysql_error(mysql));
     mysql_rollback(mysql);
   }
   return ret;
@@ -60,10 +60,8 @@ try_stmt_execute(MYSQL_STMT *mysql_stmt) {
  * main() | ARGUMENTS |      Warehouses n [Debug] [Help]
  * +==================================================================
  */
-void
-main(argc, argv)
-    int argc;
-    char *argv[];
+void main(argc, argv) int argc;
+char *argv[];
 {
   char arg[2];
   char *ptr;
@@ -89,40 +87,50 @@ main(argc, argv)
   ReadEnvironmentVariable();
   while ((c = getopt(argc, argv, "h:P:d:u:p:w:l:m:n:")) != -1) {
     switch (c) {
-      case 'h':printf("option h with value '%s'\n", optarg);
-        strncpy(connect_string, optarg, DB_STRING_MAX);
-        break;
-      case 'd':printf("option d with value '%s'\n", optarg);
-        strncpy(db_string, optarg, DB_STRING_MAX);
-        break;
-      case 'u':printf("option u with value '%s'\n", optarg);
-        strncpy(db_user, optarg, DB_STRING_MAX);
-        break;
-      case 'p':printf("option p with value '%s'\n", optarg);
-        strncpy(db_password, optarg, DB_STRING_MAX);
-        break;
-      case 'w':printf("option w with value '%s'\n", optarg);
-        count_ware = atoi(optarg);
-        break;
-      case 'l':printf("option l with value '%s'\n", optarg);
-        part_no = atoi(optarg);
-        particle_flg = 1;
-        break;
-      case 'm':printf("option m with value '%s'\n", optarg);
-        min_ware = atoi(optarg);
-        break;
-      case 'n':printf("option n with value '%s'\n", optarg);
-        max_ware = atoi(optarg);
-        break;
-      case 'P':printf("option P with value '%s'\n", optarg);
-        port = atoi(optarg);
-        break;
-      case '?':
+    case 'h':
+      printf("option h with value '%s'\n", optarg);
+      strncpy(connect_string, optarg, DB_STRING_MAX);
+      break;
+    case 'd':
+      printf("option d with value '%s'\n", optarg);
+      strncpy(db_string, optarg, DB_STRING_MAX);
+      break;
+    case 'u':
+      printf("option u with value '%s'\n", optarg);
+      strncpy(db_user, optarg, DB_STRING_MAX);
+      break;
+    case 'p':
+      printf("option p with value '%s'\n", optarg);
+      strncpy(db_password, optarg, DB_STRING_MAX);
+      break;
+    case 'w':
+      printf("option w with value '%s'\n", optarg);
+      count_ware = atoi(optarg);
+      break;
+    case 'l':
+      printf("option l with value '%s'\n", optarg);
+      part_no = atoi(optarg);
+      particle_flg = 1;
+      break;
+    case 'm':
+      printf("option m with value '%s'\n", optarg);
+      min_ware = atoi(optarg);
+      break;
+    case 'n':
+      printf("option n with value '%s'\n", optarg);
+      max_ware = atoi(optarg);
+      break;
+    case 'P':
+      printf("option P with value '%s'\n", optarg);
+      port = atoi(optarg);
+      break;
+    case '?':
         printf(
             "Usage: tpcc_load -h server_host -P port -d database_name -u mysql_user -p mysql_password -w warehouses -l part -m min_wh -n max_wh\n");
-        printf("* [part]: 1=ITEMS 2=WAREHOUSE 3=CUSTOMER 4=ORDERS\n");
-        exit(0);
-      default:printf("?? getopt returned character code 0%o ??\n", c);
+      printf("* [part]: 1=ITEMS 2=WAREHOUSE 3=CUSTOMER 4=ORDERS\n");
+      exit(0);
+    default:
+      printf("?? getopt returned character code 0%o ??\n", c);
     }
   }
   if (optind < argc) {
@@ -144,8 +152,10 @@ main(argc, argv)
   }
 
   printf("<Parameters>\n");
-  if (is_local == 0)printf("     [server]: %s\n", connect_string);
-  if (is_local == 0)printf("     [port]: %d\n", port);
+  if (is_local == 0)
+    printf("     [server]: %s\n", connect_string);
+  if (is_local == 0)
+    printf("     [port]: %d\n", port);
   printf("     [DBname]: %s\n", db_string);
   printf("       [user]: %s\n", db_user);
   printf("       [pass]: %s\n", db_password);
@@ -181,14 +191,17 @@ main(argc, argv)
   /* EXEC SQL WHENEVER SQLERROR GOTO Error_SqlCall; */
 
   mysql = mysql_init(NULL);
-  if (!mysql) goto Error_SqlCall;
+  if (!mysql)
+    goto Error_SqlCall;
 
   if (is_local == 1) {
     /* exec sql connect :connect_string; */
-    resp = mysql_real_connect(mysql, "localhost", db_user, db_password, db_string, port, NULL, 0);
+    resp = mysql_real_connect(mysql, "localhost", db_user, db_password,
+                              db_string, port, NULL, 0);
   } else {
     /* exec sql connect :connect_string USING :db_string; */
-    resp = mysql_real_connect(mysql, connect_string, db_user, db_password, db_string, port, NULL, 0);
+    resp = mysql_real_connect(mysql, connect_string, db_user, db_password,
+                              db_string, port, NULL, 0);
   }
 
   if (resp) {
@@ -201,54 +214,45 @@ main(argc, argv)
 
   for (i = 0; i < 11; i++) {
     stmt[i] = mysql_stmt_init(mysql);
-    if (!stmt[i]) goto Error_SqlCall_close;
+    if (!stmt[i])
+      goto Error_SqlCall_close;
   }
 
-  if (mysql_stmt_prepare(stmt[0],
-                         "INSERT INTO item values(?,?,?,?,?)",
-                         34))
+  if (mysql_stmt_prepare(stmt[0], "INSERT INTO item values(?,?,?,?,?)", 34))
     goto Error_SqlCall_close;
   if (mysql_stmt_prepare(stmt[1],
-                         "INSERT INTO warehouse values(?,?,?,?,?,?,?,?,?)",
-                         47))
+                         "INSERT INTO warehouse values(?,?,?,?,?,?,?,?,?)", 47))
     goto Error_SqlCall_close;
-  if (mysql_stmt_prepare(stmt[2],
-                         "INSERT INTO stock values(?,?,?,?,?,?,?,?,?,?,?,?,?,0,0,0,?)",
-                         59))
+  if (mysql_stmt_prepare(
+          stmt[2],
+          "INSERT INTO stock values(?,?,?,?,?,?,?,?,?,?,?,?,?,0,0,0,?)", 59))
     goto Error_SqlCall_close;
-  if (mysql_stmt_prepare(stmt[3],
-                         "INSERT INTO district values(?,?,?,?,?,?,?,?,?,?,?)",
-                         50))
+  if (mysql_stmt_prepare(
+          stmt[3], "INSERT INTO district values(?,?,?,?,?,?,?,?,?,?,?)", 50))
     goto Error_SqlCall_close;
-  if (mysql_stmt_prepare(stmt[4],
+  if (mysql_stmt_prepare(
+          stmt[4],
                          "INSERT INTO customer values(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 10.0, 1, 0,?)",
-                         76))
+          76))
     goto Error_SqlCall_close;
-  if (mysql_stmt_prepare(stmt[5],
-                         "INSERT INTO history values(?,?,?,?,?,?,?,?)",
+  if (mysql_stmt_prepare(stmt[5], "INSERT INTO history values(?,?,?,?,?,?,?,?)",
                          43))
     goto Error_SqlCall_close;
   if (mysql_stmt_prepare(stmt[6],
-                         "INSERT INTO orders values(?,?,?,?,?,NULL,?, 1)",
-                         46))
+                         "INSERT INTO orders values(?,?,?,?,?,NULL,?, 1)", 46))
     goto Error_SqlCall_close;
-  if (mysql_stmt_prepare(stmt[7],
-                         "INSERT INTO new_orders values(?,?,?)",
-                         36))
+  if (mysql_stmt_prepare(stmt[7], "INSERT INTO new_orders values(?,?,?)", 36))
     goto Error_SqlCall_close;
-  if (mysql_stmt_prepare(stmt[8],
-                         "INSERT INTO orders values(?,?,?,?,?,?,?, 1)",
+  if (mysql_stmt_prepare(stmt[8], "INSERT INTO orders values(?,?,?,?,?,?,?, 1)",
                          43))
     goto Error_SqlCall_close;
-  if (mysql_stmt_prepare(stmt[9],
-                         "INSERT INTO order_line values(?,?,?,?,?,?, NULL,?,?,?)",
-                         54))
+  if (mysql_stmt_prepare(
+          stmt[9], "INSERT INTO order_line values(?,?,?,?,?,?, NULL,?,?,?)",
+          54))
     goto Error_SqlCall_close;
-  if (mysql_stmt_prepare(stmt[10],
-                         "INSERT INTO order_line values(?,?,?,?,?,?,?,?,?,?)",
-                         50))
+  if (mysql_stmt_prepare(
+          stmt[10], "INSERT INTO order_line values(?,?,?,?,?,?,?,?,?,?)", 50))
     goto Error_SqlCall_close;
-
 
   /* exec sql begin transaction; */
 
@@ -261,22 +265,28 @@ main(argc, argv)
     LoadOrd();
   } else if (particle_flg == 1) {
     switch (part_no) {
-      case 1: LoadItems();
-        break;
-      case 2: LoadWare();
-        break;
-      case 3: LoadCust();
-        break;
-      case 4: LoadOrd();
-        break;
-      default: printf("Unknown part_no\n");
-        printf("1:ITEMS 2:WAREHOUSE 3:CUSTOMER 4:ORDERS\n");
+    case 1:
+      LoadItems();
+      break;
+    case 2:
+      LoadWare();
+      break;
+    case 3:
+      LoadCust();
+      break;
+    case 4:
+      LoadOrd();
+      break;
+    default:
+      printf("Unknown part_no\n");
+      printf("1:ITEMS 2:WAREHOUSE 3:CUSTOMER 4:ORDERS\n");
     }
   }
 
   /* EXEC SQL COMMIT WORK; */
 
-  if (mysql_commit(mysql)) goto Error_SqlCall;
+  if (mysql_commit(mysql))
+    goto Error_SqlCall;
 
   for (i = 0; i < 11; i++) {
     mysql_stmt_close(stmt[i]);
@@ -288,8 +298,8 @@ main(argc, argv)
 
   printf("\n...DATA LOADING COMPLETED SUCCESSFULLY.\n");
   exit(0);
-  Error_SqlCall_close:
-  Error_SqlCall:
+Error_SqlCall_close:
+Error_SqlCall:
   Error(0);
 }
 
@@ -299,8 +309,7 @@ main(argc, argv)
  * ARGUMENTS |      none
  * +==================================================================
  */
-void
-LoadItems() {
+void LoadItems() {
 
   int i_id;
   int i_im_id;
@@ -328,7 +337,7 @@ LoadItems() {
     } while (orig[pos]);
     orig[pos] = 1;
   }
-  retry:
+retry:
   if (retried)
     printf("Retrying ...\n");
   retried = 1;
@@ -339,7 +348,7 @@ LoadItems() {
 
     i_name[MakeAlphaString(14, 24, i_name)] = 0;
 
-    i_price = ((int) RandomNumber(100L, 10000L)) / 100.0;
+    i_price = ((int)RandomNumber(100L, 10000L)) / 100.0;
 
     idatasiz = MakeAlphaString(26, 50, i_data);
     i_data[idatasiz] = 0;
@@ -356,8 +365,7 @@ LoadItems() {
       i_data[pos + 7] = 'l';
     }
     if (option_debug)
-      printf("IID = %d, Name= %16s, Price = %5.2f\n",
-             i_id, i_name, i_price);
+      printf("IID = %d, Name= %16s, Price = %5.2f\n", i_id, i_name, i_price);
 
 #if 0
     printf("about to exec sql\n");
@@ -381,8 +389,10 @@ LoadItems() {
     param[4].buffer_type = MYSQL_TYPE_STRING;
     param[4].buffer = i_data;
     param[4].buffer_length = strlen(i_data);
-    if (mysql_stmt_bind_param(stmt[0], param)) goto sqlerr;
-    if (try_stmt_execute(stmt[0])) goto retry;
+    if (mysql_stmt_bind_param(stmt[0], param))
+      goto sqlerr;
+    if (try_stmt_execute(stmt[0]))
+      goto retry;
 
 #if 0
     printf("done executing sql\n");
@@ -399,11 +409,12 @@ LoadItems() {
   }
 
   /* EXEC SQL COMMIT WORK; */
-  if (mysql_commit(mysql)) goto sqlerr;
+  if (mysql_commit(mysql))
+    goto sqlerr;
 
   printf("Item Done. \n");
   return;
-  sqlerr:
+sqlerr:
   Error(stmt[0]);
 }
 
@@ -413,8 +424,7 @@ LoadItems() {
  * table |      Loads Stock, District as Warehouses are created | ARGUMENTS |
  * none +==================================================================
  */
-void
-LoadWare() {
+void LoadWare() {
 
   int w_id;
   char w_name[11];
@@ -435,7 +445,7 @@ LoadWare() {
 
   printf("Loading Warehouse \n");
   w_id = min_ware;
-  retry:
+retry:
   if (retried)
     printf("Retrying ....\n");
   retried = 1;
@@ -447,12 +457,11 @@ LoadWare() {
 
     MakeAddress(w_street_1, w_street_2, w_city, w_state, w_zip);
 
-    w_tax = ((float) RandomNumber(10L, 20L)) / 100.0;
+    w_tax = ((float)RandomNumber(10L, 20L)) / 100.0;
     w_ytd = 300000.00;
 
     if (option_debug)
-      printf("WID = %d, Name= %16s, Tax = %5.2f\n",
-             w_id, w_name, w_tax);
+      printf("WID = %d, Name= %16s, Tax = %5.2f\n", w_id, w_name, w_tax);
 
     /*EXEC SQL INSERT INTO
                     warehouse
@@ -485,20 +494,24 @@ LoadWare() {
     param[7].buffer = &w_tax;
     param[8].buffer_type = MYSQL_TYPE_FLOAT;
     param[8].buffer = &w_ytd;
-    if (mysql_stmt_bind_param(stmt[1], param)) goto sqlerr;
-    if (try_stmt_execute(stmt[1])) goto retry;
+    if (mysql_stmt_bind_param(stmt[1], param))
+      goto sqlerr;
+    if (try_stmt_execute(stmt[1]))
+      goto retry;
 
     /** Make Rows associated with Warehouse **/
-    if (Stock(w_id)) goto retry;
-    if (District(w_id)) goto retry;
+    if (Stock(w_id))
+      goto retry;
+    if (District(w_id))
+      goto retry;
 
     /* EXEC SQL COMMIT WORK; */
-    if (mysql_commit(mysql)) goto sqlerr;
-
+    if (mysql_commit(mysql))
+      goto sqlerr;
   }
 
   return;
-  sqlerr:
+sqlerr:
   Error(0);
 }
 
@@ -508,8 +521,7 @@ LoadWare() {
  * | ARGUMENTS |      none
  * +==================================================================
  */
-void
-LoadCust() {
+void LoadCust() {
 
   int w_id;
   int d_id;
@@ -520,11 +532,12 @@ LoadCust() {
     for (d_id = 1L; d_id <= DIST_PER_WARE; d_id++)
       Customer(d_id, w_id);
 
-  /* EXEC SQL COMMIT WORK;*/    /* Just in case */
-  if (mysql_commit(mysql)) goto sqlerr;
+  /* EXEC SQL COMMIT WORK;*/ /* Just in case */
+  if (mysql_commit(mysql))
+    goto sqlerr;
 
   return;
-  sqlerr:
+sqlerr:
   Error(0);
 }
 
@@ -534,8 +547,7 @@ LoadCust() {
  * Order_Line Tables | ARGUMENTS |      none
  * +==================================================================
  */
-void
-LoadOrd() {
+void LoadOrd() {
 
   int w_id;
   float w_tax;
@@ -548,11 +560,12 @@ LoadOrd() {
     for (d_id = 1L; d_id <= DIST_PER_WARE; d_id++)
       Orders(d_id, w_id);
 
-  /* EXEC SQL COMMIT WORK; */    /* Just in case */
-  if (mysql_commit(mysql)) goto sqlerr;
+  /* EXEC SQL COMMIT WORK; */ /* Just in case */
+  if (mysql_commit(mysql))
+    goto sqlerr;
 
   return;
-  sqlerr:
+sqlerr:
   Error(0);
 }
 
@@ -562,9 +575,8 @@ LoadOrd() {
  * ARGUMENTS |      w_id - warehouse id
  * +==================================================================
  */
-int
-Stock(w_id)
-    int w_id;
+int Stock(w_id)
+int w_id;
 {
 
   int s_i_id;
@@ -604,7 +616,7 @@ Stock(w_id)
     orig[pos] = 1;
   }
 
-  retry:
+retry:
   for (s_i_id = 1; s_i_id <= MAXITEMS; s_i_id++) {
 
     /* Generate Stock Data */
@@ -634,7 +646,6 @@ Stock(w_id)
       s_data[pos + 5] = 'n';
       s_data[pos + 6] = 'a';
       s_data[pos + 7] = 'l';
-
     }
     /*EXEC SQL INSERT INTO
                     stock
@@ -683,12 +694,13 @@ Stock(w_id)
     param[13].buffer_type = MYSQL_TYPE_STRING;
     param[13].buffer = s_data;
     param[13].buffer_length = strlen(s_data);
-    if (mysql_stmt_bind_param(stmt[2], param)) goto sqlerr;
-    if ((error = try_stmt_execute(stmt[2]))) goto out;
+    if (mysql_stmt_bind_param(stmt[2], param))
+      goto sqlerr;
+    if ((error = try_stmt_execute(stmt[2])))
+      goto out;
 
     if (option_debug)
-      printf("SID = %d, WID = %d, Quan = %d\n",
-             s_i_id, s_w_id, s_quantity);
+      printf("SID = %d, WID = %d, Quan = %d\n", s_i_id, s_w_id, s_quantity);
 
     if (!(s_i_id % 100)) {
       printf(".");
@@ -699,9 +711,9 @@ Stock(w_id)
   }
 
   printf(" Stock Done.\n");
-  out:
+out:
   return error;
-  sqlerr:
+sqlerr:
   Error(0);
 }
 
@@ -711,9 +723,8 @@ Stock(w_id)
  * | ARGUMENTS |      w_id - warehouse id
  * +==================================================================
  */
-int
-District(w_id)
-    int w_id;
+int District(w_id)
+int w_id;
 {
 
   int d_id;
@@ -739,7 +750,7 @@ District(w_id)
   d_w_id = w_id;
   d_ytd = 30000.0;
   d_next_o_id = 3001L;
-  retry:
+retry:
   for (d_id = 1; d_id <= DIST_PER_WARE; d_id++) {
 
     /* Generate District Data */
@@ -747,7 +758,7 @@ District(w_id)
     d_name[MakeAlphaString(6L, 10L, d_name)] = 0;
     MakeAddress(d_street_1, d_street_2, d_city, d_state, d_zip);
 
-    d_tax = ((float) RandomNumber(10L, 20L)) / 100.0;
+    d_tax = ((float)RandomNumber(10L, 20L)) / 100.0;
 
     /*EXEC SQL INSERT INTO
                     district
@@ -784,18 +795,19 @@ District(w_id)
     param[9].buffer = &d_ytd;
     param[10].buffer_type = MYSQL_TYPE_LONG;
     param[10].buffer = &d_next_o_id;
-    if (mysql_stmt_bind_param(stmt[3], param)) goto sqlerr;
-    if ((error = try_stmt_execute(stmt[3]))) goto out;
+    if (mysql_stmt_bind_param(stmt[3], param))
+      goto sqlerr;
+    if ((error = try_stmt_execute(stmt[3])))
+      goto out;
 
     if (option_debug)
-      printf("DID = %d, WID = %d, Name = %10s, Tax = %5.2f\n",
-             d_id, d_w_id, d_name, d_tax);
-
+      printf("DID = %d, WID = %d, Name = %10s, Tax = %5.2f\n", d_id, d_w_id,
+             d_name, d_tax);
   }
 
-  out:
+out:
   return error;
-  sqlerr:
+sqlerr:
   Error(0);
 }
 
@@ -806,10 +818,8 @@ District(w_id)
  * customer id |      d_id - district id |      w_id - warehouse id
  * +==================================================================
  */
-void
-Customer(d_id, w_id)
-    int d_id;
-    int w_id;
+void Customer(d_id, w_id) int d_id;
+int w_id;
 {
   int c_id;
   int c_d_id;
@@ -843,7 +853,7 @@ Customer(d_id, w_id)
 
   printf("Loading Customer for DID=%d, WID=%d\n", d_id, w_id);
 
-  retry:
+retry:
   if (retried)
     printf("Retrying ...\n");
   retried = 1;
@@ -875,7 +885,7 @@ Customer(d_id, w_id)
     c_credit[2] = 0;
 
     c_credit_lim = 50000;
-    c_discount = ((float) RandomNumber(0L, 50L)) / 100.0;
+    c_discount = ((float)RandomNumber(0L, 50L)) / 100.0;
     c_balance = -10.0;
 
     c_data[MakeAlphaString(300, 500, c_data)] = 0;
@@ -940,8 +950,10 @@ Customer(d_id, w_id)
     param[17].buffer_type = MYSQL_TYPE_STRING;
     param[17].buffer = c_data;
     param[17].buffer_length = strlen(c_data);
-    if (mysql_stmt_bind_param(stmt[4], param)) goto sqlerr;
-    if (try_stmt_execute(stmt[4])) goto retry;
+    if (mysql_stmt_bind_param(stmt[4], param))
+      goto sqlerr;
+    if (try_stmt_execute(stmt[4]))
+      goto retry;
 
     h_amount = 10.0;
 
@@ -972,12 +984,13 @@ Customer(d_id, w_id)
     param[7].buffer_type = MYSQL_TYPE_STRING;
     param[7].buffer = h_data;
     param[7].buffer_length = strlen(h_data);
-    if (mysql_stmt_bind_param(stmt[5], param)) goto sqlerr;
-    if (try_stmt_execute(stmt[5])) goto retry;
+    if (mysql_stmt_bind_param(stmt[5], param))
+      goto sqlerr;
+    if (try_stmt_execute(stmt[5]))
+      goto retry;
 
     if (option_debug)
-      printf("CID = %d, LST = %s, P# = %s\n",
-             c_id, c_last, c_phone);
+      printf("CID = %d, LST = %s, P# = %s\n", c_id, c_last, c_phone);
     if (!(c_id % 100)) {
       printf(".");
       fflush(stdout);
@@ -986,11 +999,12 @@ Customer(d_id, w_id)
     }
   }
   /* EXEC SQL COMMIT WORK; */
-  if (mysql_commit(mysql)) goto sqlerr;
+  if (mysql_commit(mysql))
+    goto sqlerr;
   printf("Customer Done.\n");
 
   return;
-  sqlerr:
+sqlerr:
   Error(0);
 }
 
@@ -1001,9 +1015,7 @@ Customer(d_id, w_id)
  * warehouse id
  * +==================================================================
  */
-void
-Orders(d_id, w_id)
-    int d_id, w_id;
+void Orders(d_id, w_id) int d_id, w_id;
 {
 
   int o_id;
@@ -1030,11 +1042,11 @@ Orders(d_id, w_id)
   printf("Loading Orders for D=%d, W= %d\n", d_id, w_id);
   o_d_id = d_id;
   o_w_id = w_id;
-  retry:
+retry:
   if (retried)
     printf("Retrying ...\n");
   retried = 1;
-  InitPermutation();    /* initialize permutation of customer numbers */
+  InitPermutation(); /* initialize permutation of customer numbers */
   for (o_id = 1; o_id <= ORD_PER_DIST; o_id++) {
 
     /* Generate Order Data */
@@ -1042,8 +1054,8 @@ Orders(d_id, w_id)
     o_carrier_id = RandomNumber(1L, 10L);
     o_ol_cnt = RandomNumber(5L, 15L);
 
-    if (o_id > 2100) {    /* the last 900 orders have not been
-					 * delivered) */
+    if (o_id > 2100) { /* the last 900 orders have not been
+                        * delivered) */
       /*EXEC SQL INSERT INTO
                       orders
                       values(:o_id,:o_d_id,:o_w_id,:o_c_id,
@@ -1064,8 +1076,10 @@ Orders(d_id, w_id)
       param[4].buffer_length = strlen(timestamp);
       param[5].buffer_type = MYSQL_TYPE_LONG;
       param[5].buffer = &o_ol_cnt;
-      if (mysql_stmt_bind_param(stmt[6], param)) goto sqlerr;
-      if (try_stmt_execute(stmt[6])) goto retry;
+      if (mysql_stmt_bind_param(stmt[6], param))
+        goto sqlerr;
+      if (try_stmt_execute(stmt[6]))
+        goto retry;
 
       /*EXEC SQL INSERT INTO
                       new_orders
@@ -1078,8 +1092,10 @@ Orders(d_id, w_id)
       param[1].buffer = &o_d_id;
       param[2].buffer_type = MYSQL_TYPE_LONG;
       param[2].buffer = &o_w_id;
-      if (mysql_stmt_bind_param(stmt[7], param)) goto sqlerr;
-      if (try_stmt_execute(stmt[7])) goto retry;
+      if (mysql_stmt_bind_param(stmt[7], param))
+        goto sqlerr;
+      if (try_stmt_execute(stmt[7]))
+        goto retry;
 
     } else {
       /*EXEC SQL INSERT INTO
@@ -1104,14 +1120,15 @@ Orders(d_id, w_id)
       param[5].buffer = &o_carrier_id;
       param[6].buffer_type = MYSQL_TYPE_LONG;
       param[6].buffer = &o_ol_cnt;
-      if (mysql_stmt_bind_param(stmt[8], param)) goto sqlerr;
-      if (try_stmt_execute(stmt[8])) goto retry;
-
+      if (mysql_stmt_bind_param(stmt[8], param))
+        goto sqlerr;
+      if (try_stmt_execute(stmt[8]))
+        goto retry;
     }
 
     if (option_debug)
-      printf("OID = %d, CID = %d, DID = %d, WID = %d\n",
-             o_id, o_c_id, o_d_id, o_w_id);
+      printf("OID = %d, CID = %d, DID = %d, WID = %d\n", o_id, o_c_id, o_d_id,
+             o_w_id);
 
     for (ol = 1; ol <= o_ol_cnt; ol++) {
       /* Generate Order Line Data */
@@ -1122,7 +1139,7 @@ Orders(d_id, w_id)
 
       ol_dist_info[MakeAlphaString(24, 24, ol_dist_info)] = 0;
 
-      tmp_float = (float) (RandomNumber(10L, 10000L)) / 100.0;
+      tmp_float = (float)(RandomNumber(10L, 10000L)) / 100.0;
 
       if (o_id > 2100) {
         /*EXEC SQL INSERT INTO
@@ -1151,8 +1168,10 @@ Orders(d_id, w_id)
         param[8].buffer_type = MYSQL_TYPE_STRING;
         param[8].buffer = ol_dist_info;
         param[8].buffer_length = strlen(ol_dist_info);
-        if (mysql_stmt_bind_param(stmt[9], param)) goto sqlerr;
-        if (try_stmt_execute(stmt[9])) goto retry;
+        if (mysql_stmt_bind_param(stmt[9], param))
+          goto sqlerr;
+        if (try_stmt_execute(stmt[9]))
+          goto retry;
 
       } else {
         /*EXEC SQL INSERT INTO
@@ -1185,14 +1204,15 @@ Orders(d_id, w_id)
         param[9].buffer_type = MYSQL_TYPE_STRING;
         param[9].buffer = ol_dist_info;
         param[9].buffer_length = strlen(ol_dist_info);
-        if (mysql_stmt_bind_param(stmt[10], param)) goto sqlerr;
-        if (try_stmt_execute(stmt[10])) goto retry;
+        if (mysql_stmt_bind_param(stmt[10], param))
+          goto sqlerr;
+        if (try_stmt_execute(stmt[10]))
+          goto retry;
       }
 
       if (option_debug)
-        printf("OL = %d, IID = %d, QUAN = %d, AMT = %8.2f\n",
-               ol, ol_i_id, ol_quantity, ol_amount);
-
+        printf("OL = %d, IID = %d, QUAN = %d, AMT = %8.2f\n", ol, ol_i_id,
+               ol_quantity, ol_amount);
     }
     if (!(o_id % 100)) {
       printf(".");
@@ -1203,12 +1223,13 @@ Orders(d_id, w_id)
     }
   }
   /*EXEC SQL COMMIT WORK;*/
-  if (mysql_commit(mysql)) goto sqlerr;
+  if (mysql_commit(mysql))
+    goto sqlerr;
 
   DestroyPermutation();
   printf("Orders Done.\n");
   return;
-  sqlerr:
+sqlerr:
   DestroyPermutation();
   Error(0);
 }
@@ -1219,18 +1240,16 @@ Orders(d_id, w_id)
  * ARGUMENTS
  * +==================================================================
  */
-void
-MakeAddress(str1, str2, city, state, zip)
-    char *str1;
-    char *str2;
-    char *city;
-    char *state;
-    char *zip;
+void MakeAddress(str1, str2, city, state, zip) char *str1;
+char *str2;
+char *city;
+char *state;
+char *zip;
 {
-  str1[MakeAlphaString(10, 20, str1)] = 0;    /* Street 1 */
-  str2[MakeAlphaString(10, 20, str2)] = 0;    /* Street 2 */
-  city[MakeAlphaString(10, 20, city)] = 0;    /* City */
-  state[MakeAlphaString(2, 2, state)] = 0;    /* State */
+  str1[MakeAlphaString(10, 20, str1)] = 0; /* Street 1 */
+  str2[MakeAlphaString(10, 20, str2)] = 0; /* Street 2 */
+  city[MakeAlphaString(10, 20, city)] = 0; /* City */
+  state[MakeAlphaString(2, 2, state)] = 0; /* State */
   zip[MakeNumberString(9, 9, zip)] = 0;    /* Zip */
 }
 
@@ -1240,15 +1259,14 @@ MakeAddress(str1, str2, city, state, zip)
  * SQL call. | ARGUMENTS
  * +==================================================================
  */
-void
-Error(mysql_stmt)
-    MYSQL_STMT *mysql_stmt;
+void Error(mysql_stmt) MYSQL_STMT *mysql_stmt;
 {
   if (mysql_stmt) {
     printf("\n%d, %s, %s", mysql_stmt_errno(mysql_stmt),
            mysql_stmt_sqlstate(mysql_stmt), mysql_stmt_error(mysql_stmt));
   }
-  printf("\n%d, %s, %s\n", mysql_errno(mysql), mysql_sqlstate(mysql), mysql_error(mysql));
+  printf("\n%d, %s, %s\n", mysql_errno(mysql), mysql_sqlstate(mysql),
+         mysql_error(mysql));
 
   /*EXEC SQL WHENEVER SQLERROR CONTINUE;*/
 

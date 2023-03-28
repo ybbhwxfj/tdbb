@@ -52,27 +52,30 @@ extern sb_percentile_t local_percentile;
 int driver(int t_num) {
   int i, j;
 
-
   /* Actually, WaitTimes are needed... */
   while (activate_transaction) {
     switch (seq_get()) {
-      case 0: do_neword(t_num);
-        break;
-      case 1: do_payment(t_num);
-        break;
-      case 2: do_ordstat(t_num);
-        break;
-      case 3: do_delivery(t_num);
-        break;
-      case 4: do_slev(t_num);
-        break;
-      default: printf("Error - Unknown sequence.\n");
+    case 0:
+      do_neword(t_num);
+      break;
+    case 1:
+      do_payment(t_num);
+      break;
+    case 2:
+      do_ordstat(t_num);
+      break;
+    case 3:
+      do_delivery(t_num);
+      break;
+    case 4:
+      do_slev(t_num);
+      break;
+    default:
+      printf("Error - Unknown sequence.\n");
     }
-
   }
 
   return (0);
-
 }
 
 /*
@@ -88,8 +91,8 @@ static int do_neword(int t_num) {
   struct timespec tbuf2;
   int w_id, d_id, c_id, ol_cnt;
   int all_local = 1;
-  int notfound = MAXITEMS + 1;  /* valid item ids are numbered consecutively
-				    [1..MAXITEMS] */
+  int notfound = MAXITEMS + 1; /* valid item ids are numbered consecutively
+                                   [1..MAXITEMS] */
   int rbk;
   int itemid[MAX_NUM_ITEMS];
   int supware[MAX_NUM_ITEMS];
@@ -124,14 +127,15 @@ static int do_neword(int t_num) {
 
   clk1 = clock_gettime(CLOCK_MONOTONIC, &tbuf1);
   for (i = 0; i < MAX_RETRY; i++) {
-    ret = neword(t_num, w_id, d_id, c_id, ol_cnt, all_local, itemid, supware, qty);
+    ret = neword(t_num, w_id, d_id, c_id, ol_cnt, all_local, itemid, supware,
+                 qty);
     clk2 = clock_gettime(CLOCK_MONOTONIC, &tbuf2);
 
     if (ret) {
 
-      rt = (double) (tbuf2.tv_sec * 1000.0 + tbuf2.tv_nsec / 1000000.0 - tbuf1.tv_sec * 1000.0
-          - tbuf1.tv_nsec / 1000000.0);
-      //printf("NOT : %.3f\n", rt);
+      rt = (double)(tbuf2.tv_sec * 1000.0 + tbuf2.tv_nsec / 1000000.0 -
+                    tbuf1.tv_sec * 1000.0 - tbuf1.tv_nsec / 1000000.0);
+      // printf("NOT : %.3f\n", rt);
       if (freport_file != NULL) {
         fprintf(freport_file, "%d %.3f\n", time_count, rt);
       }
@@ -158,7 +162,6 @@ static int do_neword(int t_num) {
         retry[0]++;
         retry2[0][t_num]++;
       }
-
     }
   }
 
@@ -179,8 +182,10 @@ static int do_neword(int t_num) {
 static int other_ware(int home_ware) {
   int tmp;
 
-  if (num_ware == 1) return home_ware;
-  while ((tmp = RandomNumber(1, num_ware)) == home_ware);
+  if (num_ware == 1)
+    return home_ware;
+  while ((tmp = RandomNumber(1, num_ware)) == home_ware)
+    ;
   return tmp;
 }
 
@@ -223,13 +228,14 @@ static int do_payment(int t_num) {
 
   clk1 = clock_gettime(CLOCK_MONOTONIC, &tbuf1);
   for (i = 0; i < MAX_RETRY; i++) {
-    ret = payment(t_num, w_id, d_id, byname, c_w_id, c_d_id, c_id, c_last, h_amount);
+    ret = payment(t_num, w_id, d_id, byname, c_w_id, c_d_id, c_id, c_last,
+                  h_amount);
     clk2 = clock_gettime(CLOCK_MONOTONIC, &tbuf2);
 
     if (ret) {
 
-      rt = (double) (tbuf2.tv_sec * 1000.0 + tbuf2.tv_nsec / 1000000.0 - tbuf1.tv_sec * 1000.0
-          - tbuf1.tv_nsec / 1000000.0);
+      rt = (double)(tbuf2.tv_sec * 1000.0 + tbuf2.tv_nsec / 1000000.0 -
+                    tbuf1.tv_sec * 1000.0 - tbuf1.tv_nsec / 1000000.0);
       if (rt > max_rt[1])
         max_rt[1] = rt;
       total_rt[1] += rt;
@@ -251,7 +257,6 @@ static int do_payment(int t_num) {
         retry[1]++;
         retry2[1][t_num]++;
       }
-
     }
   }
 
@@ -301,8 +306,8 @@ static int do_ordstat(int t_num) {
 
     if (ret) {
 
-      rt = (double) (tbuf2.tv_sec * 1000.0 + tbuf2.tv_nsec / 1000000.0 - tbuf1.tv_sec * 1000.0
-          - tbuf1.tv_nsec / 1000000.0);
+      rt = (double)(tbuf2.tv_sec * 1000.0 + tbuf2.tv_nsec / 1000000.0 -
+                    tbuf1.tv_sec * 1000.0 - tbuf1.tv_nsec / 1000000.0);
       if (rt > max_rt[2])
         max_rt[2] = rt;
       total_rt[2] += rt;
@@ -324,7 +329,6 @@ static int do_ordstat(int t_num) {
         retry[2]++;
         retry2[2][t_num]++;
       }
-
     }
   }
 
@@ -336,7 +340,6 @@ static int do_ordstat(int t_num) {
   }
 
   return (0);
-
 }
 
 /*
@@ -367,8 +370,8 @@ static int do_delivery(int t_num) {
 
     if (ret) {
 
-      rt = (double) (tbuf2.tv_sec * 1000.0 + tbuf2.tv_nsec / 1000000.0 - tbuf1.tv_sec * 1000.0
-          - tbuf1.tv_nsec / 1000000.0);
+      rt = (double)(tbuf2.tv_sec * 1000.0 + tbuf2.tv_nsec / 1000000.0 -
+                    tbuf1.tv_sec * 1000.0 - tbuf1.tv_nsec / 1000000.0);
       if (rt > max_rt[3])
         max_rt[3] = rt;
       total_rt[3] += rt;
@@ -390,7 +393,6 @@ static int do_delivery(int t_num) {
         retry[3]++;
         retry2[3][t_num]++;
       }
-
     }
   }
 
@@ -402,10 +404,9 @@ static int do_delivery(int t_num) {
   }
 
   return (0);
-
 }
 
-/* 
+/*
  * prepare data and execute the stock level transaction
  */
 static int do_slev(int t_num) {
@@ -434,8 +435,8 @@ static int do_slev(int t_num) {
 
     if (ret) {
 
-      rt = (double) (tbuf2.tv_sec * 1000.0 + tbuf2.tv_nsec / 1000000.0 - tbuf1.tv_sec * 1000.0
-          - tbuf1.tv_nsec / 1000000.0);
+      rt = (double)(tbuf2.tv_sec * 1000.0 + tbuf2.tv_nsec / 1000000.0 -
+                    tbuf1.tv_sec * 1000.0 - tbuf1.tv_nsec / 1000000.0);
       if (rt > max_rt[4])
         max_rt[4] = rt;
       total_rt[4] += rt;
@@ -457,7 +458,6 @@ static int do_slev(int t_num) {
         retry[4]++;
         retry2[4][t_num]++;
       }
-
     }
   }
 
@@ -469,5 +469,4 @@ static int do_slev(int t_num) {
   }
 
   return (0);
-
 }

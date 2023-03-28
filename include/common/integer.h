@@ -1,6 +1,6 @@
 #pragma once
 
-#include<string>
+#include <string>
 
 inline std::string int32_to_binary(int32_t v) {
   return std::string((const char *) &v, sizeof(v));

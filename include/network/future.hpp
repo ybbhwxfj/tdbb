@@ -6,9 +6,8 @@
 #include <memory>
 #include <mutex>
 
-template<typename R>
-class future {
- private:
+template<typename R> class future {
+private:
   struct context {
     context() : done_(false) {}
 
@@ -21,7 +20,7 @@ class future {
 
   ptr<context> context_;
 
- public:
+public:
   future() : context_(ptr<context>(new context())) {}
 
   void notify_fail(berror e) {
@@ -41,7 +40,7 @@ class future {
   result<R> get() {
     std::unique_lock<std::mutex> lk(context_->mtx_);
     context_->cv_.wait(lk, [this] { return this->context_->done_; });
-    if (context_->ec_ == EC::EC_OK) {
+    if (context_->ec_==EC::EC_OK) {
       return context_->result_;
     } else {
       return context_->ec_;

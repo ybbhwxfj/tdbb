@@ -1,18 +1,22 @@
 #pragma once
 
-#include "common/ptr.hpp"
 #include "common/config.h"
+#include "common/ptr.hpp"
 #include "network/client.h"
 #include <boost/asio.hpp>
 
 class db_client {
- private:
+private:
+  az_id_t az_id_;
   boost::asio::io_context io_context_;
   boost::asio::io_context::strand strand_;
   node_config conf_;
   ptr<client> cli_;
- public:
-  explicit db_client(node_config conf);
+
+public:
+  explicit db_client(az_id_t az_id, node_config conf);
+
+  ptr<client> client_ptr() { return cli_; }
 
   bool connect();
 
@@ -25,8 +29,7 @@ class db_client {
     }
   }
 
-  template<typename M>
-  result<void> recv_message(message_type id, M &msg) {
+  template<typename M> result<void> recv_message(message_type id, M &msg) {
     if (cli_) {
       return cli_->recv_message(id, msg);
     } else {
@@ -34,5 +37,5 @@ class db_client {
     }
   }
 
- private:
+private:
 };

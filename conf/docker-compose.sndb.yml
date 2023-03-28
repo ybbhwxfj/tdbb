@@ -12,48 +12,17 @@ services:
     build: ..
     cap_add:
       - NET_ADMIN
-    deploy:
-      resources:
-        limits:
-          cpus: '1'
-          memory: 40G
-        reservations:
-          cpus: '0.25'
-          memory: 1G
+      - SYS_PTRACE
     image: block-db
     networks:
       bdb-network:
         ipv4_address: 192.168.3.100
     tty: true
-  bdb-pnb-az3:
-    build: ..
-    cap_add:
-      - NET_ADMIN
-    deploy:
-      resources:
-        limits:
-          cpus: '1'
-          memory: 10GB
-        reservations:
-          cpus: '0.25'
-          memory: 1G
-    image: block-db
-    networks:
-      bdb-network:
-        ipv4_address: 192.168.3.101
-    tty: true
   bdb-s1-az1-all:
     build: ..
     cap_add:
       - NET_ADMIN
-    deploy:
-      resources:
-        limits:
-          cpus: '1'
-          memory: 10GB
-        reservations:
-          cpus: '0.25'
-          memory: 1G
+      - SYS_PTRACE
     image: block-db
     networks:
       bdb-network:
@@ -63,14 +32,7 @@ services:
     build: ..
     cap_add:
       - NET_ADMIN
-    deploy:
-      resources:
-        limits:
-          cpus: '1'
-          memory: 10GB
-        reservations:
-          cpus: '0.25'
-          memory: 1G
+      - SYS_PTRACE
     image: block-db
     networks:
       bdb-network:
@@ -80,14 +42,7 @@ services:
     build: ..
     cap_add:
       - NET_ADMIN
-    deploy:
-      resources:
-        limits:
-          cpus: '1'
-          memory: 10GB
-        reservations:
-          cpus: '0.25'
-          memory: 1G
+      - SYS_PTRACE
     image: block-db
     networks:
       bdb-network:
@@ -97,14 +52,7 @@ services:
     build: ..
     cap_add:
       - NET_ADMIN
-    deploy:
-      resources:
-        limits:
-          cpus: '1'
-          memory: 10GB
-        reservations:
-          cpus: '0.25'
-          memory: 1G
+      - SYS_PTRACE
     image: block-db
     networks:
       bdb-network:
@@ -114,14 +62,7 @@ services:
     build: ..
     cap_add:
       - NET_ADMIN
-    deploy:
-      resources:
-        limits:
-          cpus: '1'
-          memory: 10GB
-        reservations:
-          cpus: '0.25'
-          memory: 1G
+      - SYS_PTRACE
     image: block-db
     networks:
       bdb-network:
@@ -131,14 +72,7 @@ services:
     build: ..
     cap_add:
       - NET_ADMIN
-    deploy:
-      resources:
-        limits:
-          cpus: '1'
-          memory: 10GB
-        reservations:
-          cpus: '0.25'
-          memory: 1G
+      - SYS_PTRACE
     image: block-db
     networks:
       bdb-network:
@@ -148,14 +82,7 @@ services:
     build: ..
     cap_add:
       - NET_ADMIN
-    deploy:
-      resources:
-        limits:
-          cpus: '1'
-          memory: 10GB
-        reservations:
-          cpus: '0.25'
-          memory: 1G
+      - SYS_PTRACE
     image: block-db
     networks:
       bdb-network:
@@ -165,14 +92,7 @@ services:
     build: ..
     cap_add:
       - NET_ADMIN
-    deploy:
-      resources:
-        limits:
-          cpus: '1'
-          memory: 10GB
-        reservations:
-          cpus: '0.25'
-          memory: 1G
+      - SYS_PTRACE
     image: block-db
     networks:
       bdb-network:
@@ -182,14 +102,7 @@ services:
     build: ..
     cap_add:
       - NET_ADMIN
-    deploy:
-      resources:
-        limits:
-          cpus: '1'
-          memory: 10GB
-        reservations:
-          cpus: '0.25'
-          memory: 1G
+      - SYS_PTRACE
     image: block-db
     networks:
       bdb-network:
@@ -199,14 +112,7 @@ services:
     build: ..
     cap_add:
       - NET_ADMIN
-    deploy:
-      resources:
-        limits:
-          cpus: '1'
-          memory: 10GB
-        reservations:
-          cpus: '0.25'
-          memory: 1G
+      - SYS_PTRACE
     image: block-db
     networks:
       bdb-network:
@@ -216,14 +122,7 @@ services:
     build: ..
     cap_add:
       - NET_ADMIN
-    deploy:
-      resources:
-        limits:
-          cpus: '1'
-          memory: 10GB
-        reservations:
-          cpus: '0.25'
-          memory: 1G
+      - SYS_PTRACE
     image: block-db
     networks:
       bdb-network:
@@ -233,17 +132,41 @@ services:
     build: ..
     cap_add:
       - NET_ADMIN
-    deploy:
-      resources:
-        limits:
-          cpus: '1'
-          memory: 10GB
-        reservations:
-          cpus: '0.25'
-          memory: 1G
+      - SYS_PTRACE
+
     image: block-db
     networks:
       bdb-network:
         ipv4_address: 192.168.3.4
+    tty: true
+  bdb-s5-az1-all:
+    build: ..
+    cap_add:
+      - NET_ADMIN
+      - SYS_PTRACE
+    image: block-db
+    networks:
+      bdb-network:
+        ipv4_address: 192.168.1.5
+    tty: true
+  bdb-s5-az2-all:
+    build: ..
+    cap_add:
+      - NET_ADMIN
+      - SYS_PTRACE
+    image: block-db
+    networks:
+      bdb-network:
+        ipv4_address: 192.168.2.5
+    tty: true
+  bdb-s5-az3-all:
+    build: ..
+    cap_add:
+      - NET_ADMIN
+      - SYS_PTRACE
+    image: block-db
+    networks:
+      bdb-network:
+        ipv4_address: 192.168.3.5
     tty: true
 version: '3.8'

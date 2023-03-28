@@ -19,7 +19,7 @@
 #define SB_PERCENTILE_H
 
 #ifdef HAVE_PTHREAD_H
-# include <pthread.h>
+#include <pthread.h>
 #endif
 
 typedef struct {
@@ -34,8 +34,8 @@ typedef struct {
   pthread_mutex_t mutex;
 } sb_percentile_t;
 
-int sb_percentile_init(sb_percentile_t *percentile,
-                       unsigned int size, double range_min, double range_max);
+int sb_percentile_init(sb_percentile_t *percentile, unsigned int size,
+                       double range_min, double range_max);
 
 void sb_percentile_update(sb_percentile_t *percentile, double value);
 

@@ -17,7 +17,7 @@ if [ ! -d mysql-8.0.26 ]; then
   tar -xvf mysql-boost-8.0.26.tar.gz
 fi
 cd mysql-8.0.26
-patch -s -p1 < ../../mysql/:mysql-8.0.26.patch
+#patch -s -p1 < ../../mysql/:mysql-8.0.26.patch
 rm -rf build
 mkdir -p build
 cd build

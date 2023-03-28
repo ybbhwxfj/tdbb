@@ -1,7 +1,7 @@
 #pragma once
 
-#include "common/id.h"
 #include "common/block_exception.h"
+#include "common/id.h"
 #include <boost/assert.hpp>
 
 const table_id_t TPCC_CUSTOMER = 1;
@@ -34,7 +34,7 @@ static const std::map<std::string, table_id_t> __name2id__ = {
 
 inline table_id_t str_2_table_id(const std::string &name) {
   auto iter = __name2id__.find(name);
-  if (iter != __name2id__.end()) {
+  if (iter!=__name2id__.end()) {
     return iter->second;
   } else {
     BOOST_ASSERT(false);

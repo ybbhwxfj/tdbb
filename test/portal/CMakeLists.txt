@@ -15,7 +15,6 @@ target_link_libraries(${test_binary}
         raft
         common
         proto
-        panel
         network
         pthread
         test_common
@@ -25,6 +24,7 @@ target_link_libraries(${test_binary}
         ${Boost_JSON_LIBRARY}
         ${Boost_UNIT_TEST_FRAMEWORK_LIBRARY}
         ${Boost_TEST_EXEC_MONITOR_LIBRARY}
+        ${Boost_LOG_SETUP_LIBRARY} # ahead of boost_log
         ${Boost_LOG_LIBRARY}
         ${Boost_SERIALIZATION_LIBRARY}
         ${Boost_SYSTEM_LIBRARY}

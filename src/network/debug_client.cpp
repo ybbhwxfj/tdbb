@@ -1,6 +1,5 @@
 #include "network/debug_client.h"
 
-
 //
 // Copyright (c) 2016-2019 Vinnie Falco (vinnie dot falco at gmail dot com)
 //
@@ -18,25 +17,23 @@
 
 //[example_http_client
 
+#include <boost/asio/connect.hpp>
+#include <boost/asio/ip/tcp.hpp>
 #include <boost/beast/core.hpp>
 #include <boost/beast/http.hpp>
 #include <boost/beast/version.hpp>
-#include <boost/asio/connect.hpp>
-#include <boost/asio/ip/tcp.hpp>
 #include <cstdlib>
 #include <iostream>
 #include <string>
 
-namespace beast = boost::beast;     // from <boost/beast.hpp>
-namespace http = beast::http;       // from <boost/beast/http.hpp>
-namespace net = boost::asio;        // from <boost/asio.hpp>
-using tcp = net::ip::tcp;           // from <boost/asio/ip/tcp.hpp>
+namespace beast = boost::beast; // from <boost/beast.hpp>
+namespace http = beast::http;   // from <boost/beast/http.hpp>
+namespace net = boost::asio;    // from <boost/asio.hpp>
+using tcp = net::ip::tcp;       // from <boost/asio/ip/tcp.hpp>
 
 // Performs an HTTP GET and prints the response
-int debug_request(
-    const std::string &address,
-    uint16_t port,
-    const std::string &path, std::ostream &os) {
+int debug_request(const std::string &address, uint16_t port,
+                  const std::string &path, std::ostream &os) {
   try {
     int version = 11;
 
@@ -76,7 +73,6 @@ int debug_request(
       throw beast::system_error{ec};
     }
 
-
     // Write the message body to stream
     os << beast::buffers_to_string(p.get().body().data());
 
@@ -90,13 +86,11 @@ int debug_request(
       throw beast::system_error{ec};
 
     // If we get here then the connection is closed gracefully
-  }
-  catch (std::exception const &e) {
+  } catch (std::exception const &e) {
     std::cerr << "Error: " << e.what() << std::endl;
     return EXIT_FAILURE;
   }
   return EXIT_SUCCESS;
 }
-
 
 //]

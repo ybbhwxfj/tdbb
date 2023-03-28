@@ -9,12 +9,13 @@ CCB = "CCB"
 PNB = "PNB"
 CLIENT = "CLIENT"
 PORT = 700
+REPLICATION_PORT = 800
 
 # https://gist.github.com/dfee/6ed3a4b05cfe7a6faf40a2102408d5d8
-IP_ADDRESS = r'.*?(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\s*\((Public|Private)\).*?'
+IP_ADDRESS = r'.*?(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\s*\((Internet|Public|Private|VPC)\).*?'
 IPAddressPattern = re.compile(IP_ADDRESS)
-Internet = 'Public'
-Private = 'Private'
+Internet = ['Internet', 'Public']
+Private = ['Private', 'VPC']
 
 
 def config():
@@ -32,9 +33,9 @@ def retrieve_ip_from_file(file_path):
         for line in lines:
             ip, net = regex_match(line)
             if ip is not None and net is not None:
-                if net == Private:
+                if net in Private:
                     private_ip = ip
-                elif net == Internet:
+                elif net in Internet:
                     internet_ip = ip
                 if private_ip != '' and internet_ip != '':
                     ips.append((internet_ip, private_ip))
@@ -62,103 +63,116 @@ def block_type_to_name(block_type_list):
     return name
 
 
-def gen_configure_json(files, json_name, port, tight=True, num_shard=1):
-    az2ips = {}
-    be_az2ips = {}
-    configure = config()
-    if tight:
-        array = [[CCB, RLB, DSB]]
-    else:
-        array = [[CCB], [RLB], [DSB]]
+def shard_name_string(names):
+    name = ""
+    for i in range(len(names)):
+        if i == 0:
+            name = names[i]
+        else:
+            name = name + "_" + names[i]
+    return name
 
-    max_n = 0
-    min_n = 1000
+#
+#     if tight:
+#         array = [[CCB, RLB, DSB]]
+#     else:
+#         array = [[CCB], [RLB], [DSB]]
+def gen_configure_json(
+        files,
+        json_name,
+        port,
+        repl_port,
+        block_type=None,
+        block_num_node=None
+):
+    if block_num_node is None:
+        block_num_node = [1, 1, 1]
+    if block_type is None:
+        block_type = [[CCB], [RLB], [DSB]]
+    if len(block_num_node) != len(block_type) or len(block_type) > 3 or len(block_type) == 0:
+        print("configure error")
+        exit(-1)
+
+    az2ips = {}
+    num_shard = 0
+
+    for num in block_num_node:
+        if num_shard < num:
+            num_shard = num
+
+    block_node_name = []
+    for i in range(len(block_type)):
+        s_name_array = []
+        num_node = block_num_node[i]
+        n = 0
+        while n < num_shard:
+            s_name = []  # in one node
+            if num_shard % num_node != 0:
+                raise 0
+            num_shard_per_node = int(num_shard / num_node)
+            for j in range(num_shard_per_node):
+                s_name.append("s_{}".format(n + 1))
+                n += 1
+            s_name_array.append(s_name)
+            print(s_name)
+        block_node_name.append(s_name_array)
+
     for f in files:
         ips = retrieve_ip_from_file(f)
+        print(ips)
         file_base_name = os.path.basename(f)
         az_name = os.path.splitext(file_base_name)[0]
         az2ips[az_name] = ips
-        if len(ips) > max_n:
-            max_n = len(ips)
-            cli_az_name = az_name
-        if len(ips) < min_n:
-            min_n = len(ips)
-    if min_n < num_shard:
-        print("shards: {}".format(num_shard))
-        return
 
-    panel_az2ips = {}
-    client_az2ips = {}
-    for az in az2ips.keys():
-        ips = az2ips[az]
-        if len(az2ips[az]) - min_n == 2:
-            panel_az2ips[az] = ips[min_n]
-            client_az2ips[az] = ips[min_n + 1]
-        elif len(az2ips[az]) - min_n == 1:
-            if len(client_az2ips) == 0:
-                client_az2ips[az] = ips[min_n]
-            if len(panel_az2ips) == 0:
-                panel_az2ips[az] = ips[min_n]
-        be_az2ips[az] = ips[0:min_n].copy()
+    server_nodes = []
+    for az_name in az2ips.keys():
+        ips = az2ips[az_name]
+        for i in range(len(block_type)):
+            bt = block_type[i]
 
-    nodes = []
-
-    for az_name in be_az2ips.keys():
-        ips = be_az2ips[az_name].copy()
-        i = 0
-        sid = 0
-        while i < num_shard:
-            sid = sid + 1
-            ip_block = []
-            if num_shard == min_n:
-                ip_block = [ips[i], ips[i], ips[i]]
-                i = i + 1
-            else:
-                ip_block = [ips[i], ips[i + 1], ips[i + 2]]
-                i = i + 3
-
-            for j in range(len(array)):
-                ip = ip_block[j]
-                block_types = array[j]
-                b_name = block_type_to_name(block_types)
+            for j in range(len(block_node_name[i])):
+                shard_names = block_node_name[i][j]
+                ip = ips.pop(0)
+                b_name = block_type_to_name(bt)
                 node = {
                     "zone_name": az_name,
-                    "shard_name": "s{}".format(sid),
-                    "node_name": "node_s{}_r{}_b{}".format(sid, az_name, b_name),
+                    "shard_name": shard_names,
+                    "node_name": "node_s{}_r{}_b{}".format(shard_name_string(shard_names), az_name, b_name),
+                    # public address
                     "address": ip[0],
+                    # private address
                     "private_address": ip[1],
-                    "port": port + j * 100,
-                    "block_type": block_types
+                    "port": port,
+                    "repl_port": repl_port,
+                    "block_type": bt
                 }
-                nodes.append(node)
+                server_nodes.append(node)
+        az2ips[az_name] = ips
 
-    configure["node_server_list"] = nodes
-    for az in client_az2ips.keys():
-        ip = client_az2ips[az]
-        cli_node = {
-            "zone_name": az,
-            "shard_name": "",
-            "node_name": "client",
-            "address": ip[0],
-            "private_address": ip[1],
-            "port": port,
-            "block_type": [CLIENT]
-        }
-        configure['node_client'] = cli_node
+    configure = config()
+    configure["node_server_list"] = server_nodes
 
-    # client and panel located at the same node
-    for az in panel_az2ips.keys():
-        ip = panel_az2ips[az]
-        panel_node = {
-            "zone_name": az,
-            "shard_name": "",
-            "node_name": "panel",
-            "address": ip[0],
-            "private_address": ip[1],
-            "port": port + 100,
-            "block_type": [PNB]
-        }
-        configure['node_panel'] = panel_node
+    # generate client configure
+    client_nodes = []
+    # in az2ips, only client ip address left
+    client_id = 0
+    for az_name in az2ips.keys():
+        ips = az2ips[az_name]
+        for ip in ips:
+            client_id = client_id + 1
+            cli_node = {
+                "zone_name": az_name,
+                "shard_name": ["client_{}".format(client_id)],
+                "node_name": "client_{}".format(client_id),
+                "address": ip[0],
+                "private_address": ip[1],
+                "port": port,
+                "repl_port": repl_port,
+                "block_type": [CLIENT]
+            }
+            client_nodes.append(cli_node)
+
+    configure["node_client_list"] = client_nodes
 
     with open(json_name, 'w') as file:
         file.write(json.dumps(configure, indent=4))
@@ -167,20 +181,42 @@ def gen_configure_json(files, json_name, port, tight=True, num_shard=1):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='configure')
+    parser.add_argument('-p', '--path', type=str, help="az configure file path")
     parser.add_argument('-s', '--shards', type=int)
-    parser.add_argument('-b', '--bind', action='store_true', help='bind')
+    parser.add_argument('-tb', '--tight-bind', action='store_true', help='tight bind')
+    parser.add_argument('-scr', '--share-ccb-rlb', action='store_true', help='share CCB and RLB, and scale DSB block')
     file_name = ["az1.txt", "az2.txt", "az3.txt"]
-    gen_configure_json(file_name, "node.conf.sdb.b.json", PORT, True)
-    gen_configure_json(file_name, "node.conf.sdb.ub.json", PORT, False)
+    # gen_configure_json(file_name, "node.conf.sdb.b.json", PORT, True)
+    # gen_configure_json(file_name, "node.conf.sdb.ub.json", PORT, False)
 
     args = parser.parse_args()
-    bind = args.bind
+    path = getattr(args,  'path')
     shards = getattr(args, 'shards')
+    tight_bind = getattr(args, 'tight_bind')
+    scale_dsb = getattr(args, 'share_ccb_rlb')
+
+    if path is not None:
+        f = []
+        for file in file_name:
+            f.append('{}/{}'.format(path, file))
+        file_name = f
+        
     if shards is None:
         shards = 1
 
+    if scale_dsb:
+        gen_configure_json(file_name, "node.conf.scrdb.json", PORT, REPLICATION_PORT,
+                           [[CCB, RLB ], [DSB]], [1, shards])
+        exit(0)
+
     if shards > 1:
-        gen_configure_json(file_name, "node.conf.sndb.json", PORT, True, shards)
+        gen_configure_json(file_name, "node.conf.sndb.json", PORT, REPLICATION_PORT,
+                           [[CCB, RLB, DSB]], [shards])
     else:
-        gen_configure_json(file_name, "node.conf.sdb.b.json", PORT, True, shards)
-        gen_configure_json(file_name, "node.conf.sdb.ub.json", PORT, False, shards)
+        if tight_bind:
+            gen_configure_json(file_name, "node.conf.sdb.tb.json", PORT, REPLICATION_PORT,
+                               [[CCB, RLB, DSB]], [1]
+                               )
+        else:
+            gen_configure_json(file_name, "node.conf.sdb.lb.json", PORT, REPLICATION_PORT,
+                               [[CCB], [RLB], [DSB]], [1, 1, 1])

@@ -1,8 +1,8 @@
 #pragma once
 
 #include "common/enum_str.h"
-#include <unordered_map>
 #include <string>
+#include <unordered_map>
 
 // This is the custom error code enum
 //! [enum]
@@ -12,9 +12,9 @@ enum EC {
   EC_TX_ABORT,
 
   EC_MARSHALL_ERROR,
+  EC_UNMARSHALL_ERROR,
   EC_BUFFER_OVERFLOW,
   EC_INSUFFICIENT_SPACE,
-  EC_MESSAGE_SIZE_TOO_LARGE,
   EC_LOCK_ERROR,
   EC_EXSISTING_TRANSACTION,
   EC_NO_SUCH_TRANSACTION,
@@ -48,9 +48,8 @@ enum EC {
   EC_MESSAGE_MAGIC_ERROR,
   EC_MESSAGE_ID_ERROR,
   EC_CASCADE,
-  EC_DEADLOCK,
+  EC_VICTIM,
   EC_APPEND_LOG_ERROR,
 };
 
-template<>
-enum_strings<EC>::e2s_t enum_strings<EC>::enum2str;
+template<> enum_strings<EC>::e2s_t enum_strings<EC>::enum2str;

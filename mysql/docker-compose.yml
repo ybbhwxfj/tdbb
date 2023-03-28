@@ -13,6 +13,7 @@ services:
     build: ..
     cap_add:
       - NET_ADMIN
+      - SYS_PTRACE
     deploy:
       resources:
         limits:
@@ -30,6 +31,7 @@ services:
     build: ..
     cap_add:
       - NET_ADMIN
+      - SYS_PTRACE
     deploy:
       resources:
         limits:
@@ -47,6 +49,7 @@ services:
     build: ..
     cap_add:
       - NET_ADMIN
+      - SYS_PTRACE
     deploy:
       resources:
         limits:
@@ -64,6 +67,7 @@ services:
     build: ..
     cap_add:
       - NET_ADMIN
+      - SYS_PTRACE
     deploy:
       resources:
         limits:

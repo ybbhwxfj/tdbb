@@ -7,8 +7,7 @@ enum enum_x {
   ENUM_VALUE1,
 };
 
-template<>
-enum_strings<enum_x>::e2s_t enum_strings<enum_x>::enum2str;
+template<> enum_strings<enum_x>::e2s_t enum_strings<enum_x>::enum2str;
 
 template<>
 enum_strings<enum_x>::e2s_t enum_strings<enum_x>::enum2str = {

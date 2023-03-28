@@ -37,7 +37,8 @@ RUN \
     mysql-server
 
 RUN pip3 install \
-    paramiko
+    paramiko \
+    tcconfig
 
 RUN rm -rf /root/block-db
 COPY . /root/block-db

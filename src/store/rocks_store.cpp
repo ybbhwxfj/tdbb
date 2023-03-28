@@ -1,8 +1,9 @@
 #include "store/rocks_store.h"
 #ifdef DB_TYPE_ROCKS
 #include "common/endian.h"
+#include "common/logger.hpp"
+#include "common/tx_log.h"
 #include <boost/filesystem.hpp>
-#include <boost/log/trivial.hpp>
 #include <map>
 
 std::map<rocksdb::Status::Code, EC> __rockserr2ec_map = {
@@ -43,24 +44,22 @@ rocks_store::rocks_store(const config &conf)
     boost::filesystem::create_directories(dir);
   } else {
     if (!boost::filesystem::is_directory(dir)) {
-      BOOST_LOG_TRIVIAL(error) << path_ << " is not a directory";
+      LOG(error) << path_ << " is not a directory";
     }
   }
 
   rocksdb::Options options;
   options.create_if_missing = true;
   options.comparator = &cmp_;
-  BOOST_LOG_TRIVIAL(info) << id_2_name(conf.node_id()) << " rocksdb path :" << dir.c_str();
+  LOG(info) << id_2_name(conf.node_id()) << " rocksdb path :" << dir.c_str();
   rocksdb::Status status = rocksdb::DB::Open(options, dir.c_str(), &db_);
   if (not status.ok()) {
     BOOST_ASSERT(status.ok());
-    BOOST_LOG_TRIVIAL(error) << "cannot open rocksdb " << dir.c_str();
+    LOG(error) << "cannot open rocksdb " << dir.c_str();
   }
 }
 
-rocks_store::~rocks_store() {
-  delete db_;
-}
+rocks_store::~rocks_store() { delete db_; }
 
 void rocks_store::close() {
   if (db_) {
@@ -68,43 +67,45 @@ void rocks_store::close() {
   }
 }
 
-result<void> rocks_store::replay(const replay_to_dsb_request msg) {
+result<void> rocks_store::replay(ptr<std::vector<ptr<tx_operation>>> ops) {
   rocksdb::WriteBatch batch;
-  for (const tx_log &log : msg.logs()) {
-    for (const tx_operation &op : log.operations()) {
-      switch (op.op_type()) {
-        case tx_op_type::TX_OP_DELETE: {
-          table_id_t table_id = op.tuple_row().table_id();
-          tuple_id_t key = op.tuple_row().tuple_id();
-          key128 k(table_id, key);
-          rocksdb::Status s = batch.Delete(rocksdb::Slice(k));
-          if (!s.ok()) {
-            // TODO ...
-          }
-        }
-          break;
-        case tx_op_type::TX_OP_INSERT:
-        case tx_op_type::TX_OP_UPDATE: {
-          table_id_t table_id = op.tuple_row().table_id();
-          tuple_id_t key = op.tuple_row().tuple_id();
-          if (table_id >= MAX_TABLES) {
-            // TODO ...
-          }
 
-          //bool overwrite = op.op_type() == TX_OP_UPDATE;
-
-          key128 k(table_id, key);
-          rocksdb::Status s = batch.Put(rocksdb::Slice(k),
-                                        rocksdb::Slice(pbtuple_to_binary(op.tuple_row().tuple())));
-          if (!s.ok()) {
-            // TODO ...
-          }
-        }
-          break;
-        default:break;
+  for (auto op_ptr : *ops) {
+    tx_operation &op = *op_ptr;
+    switch (op.op_type()) {
+    case tx_op_type::TX_OP_DELETE: {
+      table_id_t table_id = op.tuple_row().table_id();
+      tuple_id_t key = op.tuple_row().tuple_id();
+      key128 k(table_id, key);
+      rocksdb::Status s = batch.Delete(rocksdb::Slice(k));
+      if (!s.ok()) {
+        // TODO ...
       }
     }
+      break;
+    case tx_op_type::TX_OP_INSERT:
+    case tx_op_type::TX_OP_UPDATE: {
+      table_id_t table_id = op.tuple_row().table_id();
+      tuple_id_t key = op.tuple_row().tuple_id();
+      if (table_id >= MAX_TABLES) {
+        // TODO ...
+      }
+
+      // bool overwrite = op.op_type() == TX_OP_UPDATE;
+
+      key128 k(table_id, key);
+      BOOST_ASSERT(!is_tuple_nil(op.tuple_row().tuple()));
+      rocksdb::Status s =
+          batch.Put(rocksdb::Slice(k), rocksdb::Slice(op.tuple_row().tuple()));
+      if (!s.ok()) {
+        // TODO ...
+      }
+    }
+      break;
+    default:break;
+    }
   }
+
   rocksdb::Status sw = db_->Write(rocksdb::WriteOptions(), &batch);
   EC ecw = rocks_to_ec(sw.code());
   if (ecw != EC::EC_OK) {
@@ -118,19 +119,17 @@ result<void> rocks_store::replay(const replay_to_dsb_request msg) {
     return outcome::success();
   }
 }
-result<void> rocks_store::put(
-    table_id_t table_id,
-    tuple_id_t key,
-    tuple_pb &&tuple) {
+result<void> rocks_store::put(table_id_t table_id, tuple_id_t key,
+                              tuple_pb &&tuple) {
+  // LOG(trace) <<  node_name_  << " load tuple, table id:" << table_id << "
+  // tuple id:" << key;
   if (table_id >= MAX_TABLES) {
     return outcome::failure(EC::EC_UNKNOWN_TABLE_ID);
   }
-
+  BOOST_ASSERT(!is_tuple_nil(tuple));
   key128 k(table_id, key);
-  rocksdb::Status sw = db_->Put(
-      rocksdb::WriteOptions(),
-      rocksdb::Slice(k),
-      rocksdb::Slice(pbtuple_to_binary(tuple)));
+  rocksdb::Status sw = db_->Put(rocksdb::WriteOptions(), rocksdb::Slice(k),
+                                rocksdb::Slice(tuple));
   EC ecw = rocks_to_ec(sw.code());
   if (ecw != EC::EC_OK) {
     return outcome::failure(ecw);
@@ -143,11 +142,11 @@ result<void> rocks_store::sync() {
   rocksdb::Status ss = db_->SyncWAL();
   EC ec = rocks_to_ec(ss.code());
   if (ec != EC::EC_OK) {
-    BOOST_LOG_TRIVIAL(error) << node_name_ << "sync wal";
+    LOG(error) << node_name_ << "sync wal";
     return outcome::failure(ec);
   } else {
 
-    BOOST_LOG_TRIVIAL(trace) << node_name_ << "sync wal";
+    LOG(trace) << node_name_ << "sync wal";
     return outcome::success();
   }
 }
@@ -156,22 +155,23 @@ result<ptr<tuple_pb>> rocks_store::get(table_id_t table_id, tuple_id_t key) {
   if (table_id >= MAX_TABLES) {
     return outcome::failure(EC::EC_UNKNOWN_TABLE_ID);
   }
-  std::string tuple;
+  ptr<std::string> tuple(cs_new<std::string>());
   key128 k(table_id, key);
-  rocksdb::Status s = db_->Get(rocksdb::ReadOptions(), k, &tuple);
+  rocksdb::Status s = db_->Get(rocksdb::ReadOptions(), k, &(*tuple));
   EC ec = rocks_to_ec(s.code());
   if (ec == EC::EC_NOT_FOUND_ERROR) {
-    BOOST_LOG_TRIVIAL(debug) << "cannot find tuple, table id:" << table_id << " tuple id:" << key;
+    LOG(debug) << "cannot find tuple, table id:" << table_id
+               << " tuple id:" << key;
   }
   if (ec == EC::EC_OK) {
-    ptr<tuple_pb> tp(new tuple_pb());
-    tp->ParseFromString(tuple);
-    return outcome::success(tp);
+
+    BOOST_ASSERT(!is_tuple_nil(*tuple));
+    return outcome::success(tuple);
   } else {
     return outcome::failure(ec);
   }
-  BOOST_ASSERT(not(ec == EC::EC_OK && tuple.empty()));
+  BOOST_ASSERT(not(ec == EC::EC_OK && tuple->empty()));
   return outcome::success();
 }
 
-#endif //DB_TYPE_ROCKS
+#endif // DB_TYPE_ROCKS

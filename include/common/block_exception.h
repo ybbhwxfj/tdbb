@@ -4,10 +4,10 @@
 #include <exception>
 
 class block_exception : public std::exception {
- private:
+private:
   EC ec_;
 
- public:
+public:
   explicit block_exception(EC ec) : ec_(ec) {}
 
   ~block_exception() override = default;

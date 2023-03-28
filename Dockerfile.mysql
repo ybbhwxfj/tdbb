@@ -3,6 +3,9 @@ FROM mysql-build:latest AS mysql-tpcc
 ENV DEBIAN_FRONTEND noninteractive
 RUN apt-get install -y sudo
 
+RUN pip3 install \
+    tcconfig
+
 # add our user and group first to make sure their IDs get assigned consistently, regardless of whatever dependencies get added
 RUN userdel -r -f mysql
 RUN groupadd -r -f mysql
@@ -48,10 +51,10 @@ RUN cd /home/mysql/block-db/mysql/src && \
 USER root
 RUN cp /home/mysql/block-db/bin/* /usr/bin
 
-
 USER mysql
 
-RUN cp /home/mysql/block-db/conf/docker.node.conf.sdb.b.json /home/mysql/block-db/conf/node.mysql.conf.json
+RUN cp /home/mysql/block-db/conf/docker.node.conf.sdb.tb.json /home/mysql/block-db/conf/node.conf.sdb.tb.json
+RUN cp /home/mysql/block-db/conf/docker.node.conf.sdb.tb.json /home/mysql/block-db/conf/node.mysql.conf.json
 RUN echo '{\n\
     "user": "mysql",\n\
     "password": "mysql"\n\

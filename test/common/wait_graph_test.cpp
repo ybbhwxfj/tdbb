@@ -1,12 +1,12 @@
 #define BOOST_TEST_MODULE WAIT_GRAPH_TEST
-#include <fstream>
-#include <string>
-#include <boost/test/unit_test.hpp>
-#include <boost/log/trivial.hpp>
-#include <boost/filesystem.hpp>
 #include "common/json_pretty.h"
+#include "common/logger.hpp"
 #include "common/wait_path.h"
 #include "proto/proto.h"
+#include <boost/filesystem.hpp>
+#include <boost/test/unit_test.hpp>
+#include <fstream>
+#include <string>
 
 BOOST_AUTO_TEST_CASE(wait_graph_test_read_json) {
   boost::filesystem::path p(__FILE__);
@@ -21,16 +21,15 @@ BOOST_AUTO_TEST_CASE(wait_graph_test_read_json) {
   wp.add_dependency_set(ds);
   std::stringstream pretty;
   json_pretty(ssm, pretty);
-  BOOST_LOG_TRIVIAL(info) << pretty.str();
+  LOG(info) << pretty.str();
 
   std::vector<std::vector<xid_t>> circles;
-  wp.detect_circle([&circles](const std::vector<xid_t> &c) {
-    circles.push_back(c);
-  });
+  wp.detect_circle(
+      [&circles](const std::vector<xid_t> &c) { circles.push_back(c); });
   for (const auto &c : circles) {
-    BOOST_LOG_TRIVIAL(info) << "circle->";
+    LOG(info) << "circle->";
     for (auto x : c) {
-      BOOST_LOG_TRIVIAL(info) << "    ->" << x;
+      LOG(info) << "    ->" << x;
     }
   }
   BOOST_CHECK(circles.size() == 1);
@@ -52,16 +51,15 @@ BOOST_AUTO_TEST_CASE(wait_graph_test_read_json_array) {
 
   std::stringstream pretty;
   json_pretty(ssm, pretty);
-  BOOST_LOG_TRIVIAL(info) << pretty.str();
+  LOG(info) << pretty.str();
 
   std::vector<std::vector<xid_t>> circles;
-  wp.detect_circle([&circles](const std::vector<xid_t> &c) {
-    circles.push_back(c);
-  });
+  wp.detect_circle(
+      [&circles](const std::vector<xid_t> &c) { circles.push_back(c); });
   for (const auto &c : circles) {
-    BOOST_LOG_TRIVIAL(info) << "circle->";
+    LOG(info) << "circle->";
     for (auto x : c) {
-      BOOST_LOG_TRIVIAL(info) << "    ->" << x;
+      LOG(info) << "    ->" << x;
     }
   }
   BOOST_CHECK(circles.size() == 1);

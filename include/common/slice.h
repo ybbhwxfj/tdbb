@@ -1,7 +1,7 @@
 #pragma once
 
 class slice {
- public:
+public:
   // Create an empty slice.
   slice() : data_(""), size_(0) {}
 
@@ -12,11 +12,9 @@ class slice {
   /* implicit */
   slice(const std::string &s) : data_(s.data()), size_(s.size()) {}
 
-
-
   // Create a slice that refers to s[0,strlen(s)-1]
   /* implicit */
-  slice(const char *s) : data_(s) { size_ = (s == nullptr) ? 0 : strlen(s); }
+  slice(const char *s) : data_(s) { size_ = (s==nullptr) ? 0 : strlen(s); }
 
   // Return a pointer to the beginning of the referenced data
   const char *data() const { return data_; }
@@ -25,7 +23,7 @@ class slice {
   size_t size() const { return size_; }
 
   // Return true iff the length of the referenced data is zero
-  bool empty() const { return size_ == 0; }
+  bool empty() const { return size_==0; }
 
   // Return the ith byte in the referenced data.
   // REQUIRES: n < size()

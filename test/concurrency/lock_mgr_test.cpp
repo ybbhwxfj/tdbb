@@ -1,10 +1,10 @@
 #define BOOST_TEST_MODULE LOCK_MGR_TEST
-#include <boost/test/unit_test.hpp>
-#include <string>
-#include <random>
-#include "concurrency/tx.h"
-#include "concurrency/lock_mgr.h"
 #include "common/lock_mode.h"
+#include "concurrency/lock_mgr.h"
+#include "concurrency/tx.h"
+#include <boost/test/unit_test.hpp>
+#include <random>
+#include <string>
 
 #define TUPLE_ID_MIN 1
 #define TUPLE_ID_MAX 10
@@ -16,9 +16,9 @@
 #include <boost/asio.hpp>
 
 class tx_ctx_mock : public tx_rm {
- public:
-  explicit tx_ctx_mock(xid_t xid, boost::asio::io_context &ctx) :
-      tx_rm(boost::asio::io_context::strand(ctx), xid) {}
+public:
+  explicit tx_ctx_mock(xid_t xid, boost::asio::io_context &ctx)
+      : tx_rm(boost::asio::io_context::strand(ctx), xid) {}
 
   void async_lock_acquire(EC, oid_t) override {}
 };
@@ -34,15 +34,13 @@ struct tx_lock_t {
 class random_value {
   std::default_random_engine generator_;
   std::uniform_int_distribution<uint64_t> distribution_;
- public:
-  random_value(uint64_t min, uint64_t max) :
-      generator_((uint64_t) this),
-      distribution_(min, max) {
+
+public:
+  random_value(uint64_t min, uint64_t max)
+      : generator_((uint64_t) this), distribution_(min, max) {
 
   };
-  uint64_t value() {
-    return distribution_(generator_);
-  }
+  uint64_t value() { return distribution_(generator_); }
 };
 
 enum range_type {
@@ -106,13 +104,17 @@ std::vector<tx_lock_t> gen_test_case(boost::asio::io_context &c) {
         l.oid_ = oid++;
         auto rt = range_type(rnd_rt.value());
         if (rt == RANGE_CLOSE) {
-          l.pred_.interval_ = boost::icl::interval<uint64_t>::closed(lower, upper);
+          l.pred_.interval_ =
+              boost::icl::interval<uint64_t>::closed(lower, upper);
         } else if (rt == RANGE_LEFT_OPEN) {
-          l.pred_.interval_ = boost::icl::interval<uint64_t>::left_open(lower, upper);
+          l.pred_.interval_ =
+              boost::icl::interval<uint64_t>::left_open(lower, upper);
         } else if (rt == RANGE_RIGHT_OPEN) {
-          l.pred_.interval_ = boost::icl::interval<uint64_t>::right_open(lower, upper);
+          l.pred_.interval_ =
+              boost::icl::interval<uint64_t>::right_open(lower, upper);
         } else if (rt == RANGE_OPEN) {
-          l.pred_.interval_ = boost::icl::interval<uint64_t>::open(lower, upper);
+          l.pred_.interval_ =
+              boost::icl::interval<uint64_t>::open(lower, upper);
         } else {
           continue;
         }
@@ -129,7 +131,6 @@ std::vector<tx_lock_t> gen_test_case(boost::asio::io_context &c) {
         if (not overlapped && not boost::icl::is_empty(l.pred_.interval_)) {
           pred_list.push_back(l);
         }
-
       }
     }
     std::random_device rd;
@@ -142,7 +143,7 @@ std::vector<tx_lock_t> gen_test_case(boost::asio::io_context &c) {
 BOOST_AUTO_TEST_CASE(lock_mgr_test) {
   // this io_context have no effect, only work as test stub
   boost::asio::io_context ctx(1);
-  lock_mgr mgr(1, ctx, nullptr, nullptr, nullptr);
+  lock_mgr mgr(1, 1, ctx, nullptr, nullptr, nullptr);
   std::vector<tx_lock_t> v = gen_test_case(ctx);
   for (auto &l : v) {
     mgr.lock(l.xid_, l.oid_, l.mode_, l.pred_, l.ctx_);

@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+import "tuple.proto";
+import "tuple_row.proto";
+
+
+message warm_up_req {
+  uint32 source = 1;
+  uint32 dest = 2;
+  uint64 term_id = 3;
+  repeated tuple_key tuple_key = 4;
+}
+
+message warm_up_resp {
+  uint32 source = 1;
+  uint32 dest = 2;
+  uint64 term_id = 3;
+  bool ok = 4;
+  repeated tuple_row tuple_row = 5;
+}

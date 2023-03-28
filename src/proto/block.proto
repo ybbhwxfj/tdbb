@@ -1,13 +1,13 @@
 syntax = "proto3";
 
 import "tuple_row.proto";
-import "tx_log.proto";
 
 message ccb_register_ccb_request {
   uint32 source = 1;
   uint32 dest = 2;
   uint64 cno = 3;
   bool is_lead = 4;
+  repeated uint32 shard_ids = 5;
 }
 
 message rlb_register_ccb_response {
@@ -15,9 +15,10 @@ message rlb_register_ccb_response {
   uint32 dest = 2;
   uint64 cno = 3;
   uint32 lead_node = 4;
-  uint32 dsb_node = 5;
-  bool is_lead = 6;
-  repeated  tx_log logs = 7;
+  bool is_lead = 5;
+  bool ok = 6;
+  repeated uint32 shard_ids = 7;
+  repeated uint32 dsb_node_ids = 8;
 }
 
 message ccb_read_request {
@@ -27,9 +28,9 @@ message ccb_read_request {
   uint64 xid = 4;
   uint32 oid = 5;
   uint64 table_id = 6;
-  uint64 tuple_id = 7;
-  uint64 debug_send_ts = 8;
-
+  uint64 shard_id = 7;
+  uint64 tuple_id = 8;
+  uint64 debug_send_ts = 9;
 }
 
 message dsb_read_response {
@@ -49,8 +50,8 @@ message ccb_append_log_request {
   uint32 dest = 2;
   uint64 cno = 3;
   uint32 oid = 4;
-
-  repeated tx_log logs = 6;
+  bytes repeated_tx_logs = 5; // format binary log
+  uint64 debug_send_ts = 6;
 }
 
 message rlb_commit_entries {
@@ -59,7 +60,8 @@ message rlb_commit_entries {
   uint64 cno = 3;
   uint32 error_code = 4;
   uint32 lead = 5;
-  repeated tx_log logs = 6;
+  bytes repeated_tx_logs = 6;
+  uint64 debug_send_ts = 7;
 }
 
 
@@ -67,6 +69,7 @@ message dsb_register_dsb_request {
   uint32 source = 1;
   uint32 dest = 2;
   uint64 cno = 3;
+  repeated uint32 shard_ids = 4;
 }
 
 message rlb_register_dsb_response {
@@ -74,15 +77,8 @@ message rlb_register_dsb_response {
   uint32 dest = 2;
   uint64 cno = 3;
   bool lead = 4;
-  repeated  tx_log logs = 5;
-}
-
-message rlb_report_status_to_ccb {
-  uint32 source = 1;
-  uint32 dest = 2;
-  uint32 rg_id = 3;
-  uint64 cno = 4;
-  bool lead = 5;
+  bool ok = 5;
+  repeated bytes logs = 6;
 }
 
 message ccb_report_status_response {
@@ -91,19 +87,6 @@ message ccb_report_status_response {
   uint64 cno = 3;
 }
 
-message ccb_broadcast_status {
-  uint32 source = 1;
-  uint32 dest = 2;
-  uint32 rg_id = 3;
-  uint64 cno = 4;
-  bool lead = 5;
-}
-
-message ccb_broadcast_status_response {
-  uint32 source = 1;
-  uint32 dest = 2;
-  uint64 cno = 3;
-}
 
 message lead_status_request {
   uint32 source = 1;
@@ -115,4 +98,10 @@ message lead_status_response {
   uint32 dest = 2;
   uint32 rg_lead = 3;
   repeated uint32 lead = 4;
+}
+
+message error_consistency {
+  uint32 source = 1;
+  uint32 dest = 2;
+  uint64 cno = 3;
 }

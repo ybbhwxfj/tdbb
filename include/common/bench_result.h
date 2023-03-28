@@ -1,11 +1,11 @@
 #pragma once
 
-#include <stdint.h>
 #include <boost/json.hpp>
+#include <cstdint>
 #include <string>
 
 class bench_result {
- private:
+private:
   float tpm_;
   float abort_;
   float latency_;
@@ -15,12 +15,11 @@ class bench_result {
   float latency_replicate_{};
   float latency_lock_wait_{};
   float latency_part_{};
- public:
+
+public:
   bench_result() : tpm_(0), abort_(0), latency_(0) {}
 
   void set_tpm(float tpm) { tpm_ = tpm; }
-
-  void set_abort(float abort) { abort_ = abort; }
 
   void set_latency(float latency) { latency_ = latency; }
 
@@ -36,7 +35,7 @@ class bench_result {
 
   void set_latency_part(float v) { latency_part_ = v; }
 
-  boost::json::object to_json() const {
+  [[nodiscard]] boost::json::object to_json() const {
     boost::json::object obj;
     obj["tpm"] = tpm_;
     obj["abort"] = abort_;
@@ -50,11 +49,5 @@ class bench_result {
     return obj;
   }
 
-  uint64_t append_latency() const {
-    return latency_append_;
-  }
-
-  uint64_t replicate_latency() const {
-    return latency_replicate_;
-  }
+  [[nodiscard]] float_t tps() const { return (float_t) (tpm_/60.0); }
 };

@@ -13,6 +13,7 @@ services:
     build: ..
     cap_add:
       - NET_ADMIN
+      - SYS_PTRACE
     image: mysql-tpcc
     networks:
       bdb-network:
@@ -22,6 +23,7 @@ services:
     build: ..
     cap_add:
       - NET_ADMIN
+      - SYS_PTRACE
     image: mysql-tpcc
     networks:
       bdb-network:
@@ -31,6 +33,7 @@ services:
     build: ..
     cap_add:
       - NET_ADMIN
+      - SYS_PTRACE
     image: mysql-tpcc
     networks:
       bdb-network:
@@ -40,6 +43,7 @@ services:
     build: ..
     cap_add:
       - NET_ADMIN
+      - SYS_PTRACE
     image: mysql-tpcc
     networks:
       bdb-network:

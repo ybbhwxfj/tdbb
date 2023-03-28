@@ -24,7 +24,9 @@ bool raft_test_context::check_max_committed_logs(node_id_t node_id) {
   return num_le * 2 > nodes_.size();
 }
 
-bool raft_test_context::check_at_most_one_leader_per_term(node_id_t node_id, uint64_t term, bool is_lead) {
+bool raft_test_context::check_at_most_one_leader_per_term(node_id_t node_id,
+                                                          uint64_t term,
+                                                          bool is_lead) {
   std::scoped_lock l(mutex_);
   is_lead_node_[node_id] = is_lead;
   node_term_[node_id] = term;
@@ -52,20 +54,13 @@ bool raft_test_context::check_at_most_one_leader_per_term(node_id_t node_id, uin
   }
 }
 
-bool raft_test_context::check_commit_entries(node_id_t node_id,
-                                             bool,
-                                             const std::vector<ptr<log_entry>> &entries) {
+bool raft_test_context::check_commit_entries(
+    node_id_t, bool, const std::vector<ptr<raft_log_entry>> &entries) {
   if (entries.empty()) {
     return true;
   }
   for (auto &e : entries) {
     uint64_t index = e->index();
-    for (auto &l : e->xlog()) {
-      xid_t x = l.xid();
-      if (commit_xid_[node_id] < x) {
-        commit_xid_[node_id] = x;
-      }
-    }
     if (checked_index_ < e->index()) {
       uint32_t num_committed = 0;
       std::map<std::string, std::string> message;
@@ -85,7 +80,8 @@ bool raft_test_context::check_commit_entries(node_id_t node_id,
           } else if (log_entry->term() != e->term()) {
             message[id_2_name(node->node_id_)] = "non consistent term";
           }
-          commit = log_entry->index() == index && log_entry->term() == e->term();
+          commit =
+              log_entry->index() == index && log_entry->term() == e->term();
         }
 
         num_committed += commit ? 1 : 0;
@@ -100,18 +96,27 @@ bool raft_test_context::check_commit_entries(node_id_t node_id,
   return true;
 }
 
-void raft_test_context::wait_tx_commit(uint64_t index) {
+void raft_test_context::wait_finish() {
   while (true) {
-    uint64_t n = 0;
-    for (const auto &kv : commit_xid_) {
-      if (kv.second == index) {
-        n++;
+    {
+      std::scoped_lock l(mutex_);
+      if (stop_) {
+        break;
       }
     }
-    if (n == commit_xid_.size()) {
-      break;
-    }
     sleep(1);
+  }
+}
+
+void raft_test_context::commit_log(node_id_t node_id, log_index_t index) {
+  std::scoped_lock l(mutex_);
+  committed_log_index_[node_id].insert(index);
+  if (committed_log_index_[node_id].size() == max_log_entries_) {
+    for (auto kv : committed_log_index_) {
+      if (kv.second.size() == max_log_entries_) {
+        stop_ = true;
+      }
+    }
   }
 }
 

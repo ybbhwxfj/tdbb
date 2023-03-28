@@ -4,18 +4,18 @@
 
 #ifdef DB_TYPE_CALVIN
 
-#include "proto/proto.h"
 #include "common/id.h"
 #include "concurrency/tx.h"
 #include "network/connection.h"
 #include "network/net_service.h"
+#include "proto/proto.h"
+#include <map>
 #include <mutex>
 #include <set>
-#include <map>
 #include <unordered_map>
 
 class calvin_collector : public tx_base {
- private:
+private:
   xid_t xid_;
   ptr<connection> conn_;
   net_service *service_;
@@ -23,25 +23,23 @@ class calvin_collector : public tx_base {
   std::set<shard_id_t> commit_shard_;
   std::unordered_map<uint32_t, tx_operation> ops_;
   std::recursive_mutex mutex_;
-  tx_request request_;
-  std::string trace_message_;
- public:
-  calvin_collector(
-      boost::asio::io_context::strand s,
-      xid_t xid, ptr<connection> client_conn,
-      net_service *service,
-      const tx_request &req
-  );
+  std::unordered_map<shard_id_t, node_id_t> lead_node_;
+  ptr<tx_request> request_;
+  std::stringstream trace_message_;
 
-  bool part_commit(const calvin_part_commit &msg);
+public:
+  calvin_collector(boost::asio::io_context::strand s, xid_t xid,
+                   ptr<connection> client_conn, net_service *service,
+                   const ptr<tx_request> req);
 
-  void respond();
+  bool part_commit(const ptr<calvin_part_commit> msg);
 
-  const tx_request &request() const { return request_; }
-
-  tx_request &mutable_request() { return request_; }
+  const tx_request &request() const { return *request_; }
 
   void debug_tx(std::ostream &os) const;
+
+private:
+  void respond();
 };
 
 #endif // DB_TYPE_CALVIN

@@ -17,8 +17,8 @@ test_lock_mgr
 test_network
 test_raft
 test_wait_graph
-test_db -- --dbtype db-s --bind false
-test_db -- --dbtype db-s --bind true
+test_db -- --dbtype db-s --loose-bind false
+test_db -- --dbtype db-s --loose-bind true
 test_db -- --dbtype db-sn
 test_db -- --dbtype db-d
 test_db -- --dbtype db-gro

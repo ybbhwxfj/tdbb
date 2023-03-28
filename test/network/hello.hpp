@@ -4,10 +4,10 @@
 #include <string>
 
 class hello {
- private:
+private:
   uint32_buf_t id_;
 
- public:
+public:
   hello() {}
 
   hello(int id) : id_(id) {}
@@ -22,4 +22,3 @@ class hello {
     return buffer.read((uint8_t *) this, sizeof(this));
   }
 };
-

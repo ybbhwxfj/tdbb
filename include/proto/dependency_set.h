@@ -1,6 +1,5 @@
 #pragma once
 
-#include <vector>
-#include "proto/deadlock.pb.h"
 #include "common/id.h"
-
+#include "proto/deadlock.pb.h"
+#include <vector>

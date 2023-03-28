@@ -1,6 +1,6 @@
 /*
  * -*-C-*-
- * slev.pc 
+ * slev.pc
  * corresponds to A.5 in appendix A
  */
 
@@ -18,10 +18,9 @@ extern MYSQL_STMT ***stmt;
 /*
  * the stock level transaction
  */
-int slev(int t_num,
-         int w_id_arg,        /* warehouse id */
-         int d_id_arg,        /* district id */
-         int level_arg        /* stock level */
+int slev(int t_num, int w_id_arg, /* warehouse id */
+         int d_id_arg,            /* district id */
+         int level_arg            /* stock level */
 ) {
   int w_id = w_id_arg;
   int d_id = d_id_arg;
@@ -56,21 +55,26 @@ int slev(int t_num,
   param[0].buffer = &d_id;
   param[1].buffer_type = MYSQL_TYPE_LONG;
   param[1].buffer = &w_id;
-  if (mysql_stmt_bind_param(mysql_stmt, param)) goto sqlerr;
-  if (mysql_stmt_execute(mysql_stmt)) goto sqlerr;
+  if (mysql_stmt_bind_param(mysql_stmt, param))
+    goto sqlerr;
+  if (mysql_stmt_execute(mysql_stmt))
+    goto sqlerr;
 
-  if (mysql_stmt_store_result(mysql_stmt)) goto sqlerr;
+  if (mysql_stmt_store_result(mysql_stmt))
+    goto sqlerr;
   memset(column, 0, sizeof(MYSQL_BIND) * 1); /* initialize */
   column[0].buffer_type = MYSQL_TYPE_LONG;
   column[0].buffer = &d_next_o_id;
-  if (mysql_stmt_bind_result(mysql_stmt, column)) goto sqlerr;
+  if (mysql_stmt_bind_result(mysql_stmt, column))
+    goto sqlerr;
   switch (mysql_stmt_fetch(mysql_stmt)) {
-    case 0: //SUCCESS
-      break;
-    case 1: //ERROR
-    case MYSQL_NO_DATA: //NO MORE DATA
-    default: mysql_stmt_free_result(mysql_stmt);
-      goto sqlerr;
+  case 0: // SUCCESS
+    break;
+  case 1:             // ERROR
+  case MYSQL_NO_DATA: // NO MORE DATA
+  default:
+    mysql_stmt_free_result(mysql_stmt);
+    goto sqlerr;
   }
   mysql_stmt_free_result(mysql_stmt);
 
@@ -97,14 +101,18 @@ int slev(int t_num,
   param[2].buffer = &d_next_o_id;
   param[3].buffer_type = MYSQL_TYPE_LONG;
   param[3].buffer = &d_next_o_id;
-  if (mysql_stmt_bind_param(mysql_stmt, param)) goto sqlerr;
-  if (mysql_stmt_execute(mysql_stmt)) goto sqlerr;
+  if (mysql_stmt_bind_param(mysql_stmt, param))
+    goto sqlerr;
+  if (mysql_stmt_execute(mysql_stmt))
+    goto sqlerr;
 
-  if (mysql_stmt_store_result(mysql_stmt)) goto sqlerr;
+  if (mysql_stmt_store_result(mysql_stmt))
+    goto sqlerr;
   memset(column, 0, sizeof(MYSQL_BIND) * 1); /* initialize */
   column[0].buffer_type = MYSQL_TYPE_LONG;
   column[0].buffer = &ol_i_id;
-  if (mysql_stmt_bind_result(mysql_stmt, column)) goto sqlerr;
+  if (mysql_stmt_bind_result(mysql_stmt, column))
+    goto sqlerr;
 
   for (;;) {
 #ifdef DEBUG
@@ -112,14 +120,15 @@ int slev(int t_num,
 #endif
     /*EXEC_SQL FETCH ord_line INTO :ol_i_id;*/
     switch (mysql_stmt_fetch(mysql_stmt)) {
-      case 0: //SUCCESS
-        break;
-      case MYSQL_NO_DATA: //NO MORE DATA
-        mysql_stmt_free_result(mysql_stmt);
-        goto done;
-      case 1: //ERROR
-      default:mysql_stmt_free_result(mysql_stmt);
-        goto sqlerr;
+    case 0: // SUCCESS
+      break;
+    case MYSQL_NO_DATA: // NO MORE DATA
+      mysql_stmt_free_result(mysql_stmt);
+      goto done;
+    case 1: // ERROR
+    default:
+      mysql_stmt_free_result(mysql_stmt);
+      goto sqlerr;
     }
 
 #ifdef DEBUG
@@ -140,43 +149,48 @@ int slev(int t_num,
     param2[1].buffer = &ol_i_id;
     param2[2].buffer_type = MYSQL_TYPE_LONG;
     param2[2].buffer = &level;
-    if (mysql_stmt_bind_param(mysql_stmt2, param2)) goto sqlerr2;
-    if (mysql_stmt_execute(mysql_stmt2)) goto sqlerr2;
+    if (mysql_stmt_bind_param(mysql_stmt2, param2))
+      goto sqlerr2;
+    if (mysql_stmt_execute(mysql_stmt2))
+      goto sqlerr2;
 
-    if (mysql_stmt_store_result(mysql_stmt2)) goto sqlerr2;
+    if (mysql_stmt_store_result(mysql_stmt2))
+      goto sqlerr2;
     memset(column2, 0, sizeof(MYSQL_BIND) * 1); /* initialize */
     column2[0].buffer_type = MYSQL_TYPE_LONG;
     column2[0].buffer = &i_count;
-    if (mysql_stmt_bind_result(mysql_stmt2, column2)) goto sqlerr2;
+    if (mysql_stmt_bind_result(mysql_stmt2, column2))
+      goto sqlerr2;
     switch (mysql_stmt_fetch(mysql_stmt2)) {
-      case 0: //SUCCESS
-        break;
-      case 1: //ERROR
-      case MYSQL_NO_DATA: //NO MORE DATA
-      default: mysql_stmt_free_result(mysql_stmt2);
-        goto sqlerr2;
+    case 0: // SUCCESS
+      break;
+    case 1:             // ERROR
+    case MYSQL_NO_DATA: // NO MORE DATA
+    default:
+      mysql_stmt_free_result(mysql_stmt2);
+      goto sqlerr2;
     }
     mysql_stmt_free_result(mysql_stmt2);
-
   }
 
-  done:
+done:
   /*EXEC_SQL CLOSE ord_line;*/
   /*EXEC_SQL COMMIT WORK;*/
-  if (mysql_commit(ctx[t_num])) goto sqlerr;
+  if (mysql_commit(ctx[t_num]))
+    goto sqlerr;
 
   return (1);
 
-  sqlerr:
+sqlerr:
   fprintf(stderr, "slev\n");
   error(ctx[t_num], mysql_stmt);
   /*EXEC SQL WHENEVER SQLERROR GOTO sqlerrerr;*/
   /*EXEC_SQL ROLLBACK WORK;*/
   mysql_rollback(ctx[t_num]);
-  sqlerrerr:
+sqlerrerr:
   return (0);
 
-  sqlerr2:
+sqlerr2:
   fprintf(stderr, "slev\n");
   error(ctx[t_num], mysql_stmt2);
   /*EXEC SQL WHENEVER SQLERROR GOTO sqlerrerr;*/
