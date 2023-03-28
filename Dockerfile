@@ -16,9 +16,11 @@ RUN echo '{\n\
     "password": "root"\n\
 }' > /root/block-db/conf/user.conf.json
 
-RUN cp /root/block-db/conf/docker.node.conf.sndb.b.json /root/block-db/conf/node.conf.sndb.b.json
-RUN cp /root/block-db/conf/docker.node.conf.sdb.ub.json /root/block-db/conf/node.conf.sdb.ub.json
-RUN cp /root/block-db/conf/docker.node.conf.sdb.b.json /root/block-db/conf/node.conf.sdb.b.json
+RUN cp /root/block-db/conf/docker.node.conf.sndb.json /root/block-db/conf/node.conf.sndb.json
+RUN cp /root/block-db/conf/docker.node.conf.sdb.lb.json /root/block-db/conf/node.conf.sdb.lb.json
+RUN cp /root/block-db/conf/docker.node.conf.sdb.tb.json /root/block-db/conf/node.conf.sdb.tb.json
+RUN cp /root/block-db/conf/docker.node.conf.scrdb.json /root/block-db/conf/node.conf.scrdb.json
+RUN cp /root/block-db/conf/docker.node.conf.sdb.tb.json /root/block-db/conf/node.mysql.conf.json
 
 RUN echo 'Asia/Shanghai' > /etc/timezone
 RUN ln -s -f /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
@@ -30,10 +32,11 @@ RUN rm /etc/security/limits.conf && \
 
 WORKDIR /root/block-db
 
+RUN rm -rf /root/block-db/bin /root/block-db/build
 RUN cd /root/block-db && \
     mkdir -p build && \
     cd build && \
-    cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo .. && \
+    cmake -DDISABLE_TEST=true -DCMAKE_BUILD_TYPE=RelWithDebInfo .. && \
     make -j
 
 

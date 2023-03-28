@@ -1,6 +1,6 @@
 #include "history.h"
-#include "common/wait_path.h"
 #include "common/lock_mode.h"
+#include "common/wait_path.h"
 
 void history::add_op(const tx_op &o) {
   std::scoped_lock l(mutex_);
@@ -8,7 +8,8 @@ void history::add_op(const tx_op &o) {
 }
 
 struct key {
-  key(table_id_t tbl_id, tuple_id_t tpl_id) : table_id_(tbl_id), tuple_id_(tpl_id) {}
+  key(table_id_t tbl_id, tuple_id_t tpl_id)
+      : table_id_(tbl_id), tuple_id_(tpl_id) {}
   table_id_t table_id_;
   tuple_id_t tuple_id_;
 };
@@ -21,7 +22,8 @@ struct key_equal {
 
 struct key_hash {
   uint64_t operator()(const key &k) const {
-    return (k.table_id_ + k.tuple_id_) * (k.table_id_ + k.tuple_id_ + 1) / 2 + k.table_id_;
+    return (k.table_id_ + k.tuple_id_) * (k.table_id_ + k.tuple_id_ + 1) / 2 +
+        k.table_id_;
   }
 };
 
@@ -50,8 +52,8 @@ bool history::is_serializable() {
   }
   erase_if(history_, [committed_](const tx_op &op) {
     // remove all non access operations and not committed tx_rm operations
-    return (op.cmd_ != TX_CMD_RM_READ || op.cmd_ == TX_CMD_RM_WRITE)
-        || not committed_.contains(op.xid_);
+    return (op.cmd_ != TX_CMD_RM_READ || op.cmd_ == TX_CMD_RM_WRITE) ||
+        not committed_.contains(op.xid_);
   });
 
   // left only committed read/write
@@ -66,8 +68,8 @@ bool history::is_serializable() {
     for (tx_op &o : p.second) {
       if (prev_op) {
         if (is_conflict(o, *prev_op)) {
-          ptr<tx_wait> w(new tx_wait(prev_op->xid_));
-          w->out().insert(o.xid_);
+          ptr<tx_wait> w(new tx_wait(o.xid_));
+          w->in_set().insert(prev_op->xid_);
           set.add(w);
         }
       }
@@ -76,9 +78,9 @@ bool history::is_serializable() {
   }
   path.merge_dependency_set(set);
   auto find_circle = [](const std::vector<xid_t> &circle) {
-    BOOST_LOG_TRIVIAL(info) << "find non-serializable";
+    LOG(info) << "find non-serializable";
     for (auto x : circle) {
-      BOOST_LOG_TRIVIAL(info) << "    --> " << x;
+      LOG(info) << "    --> " << x;
     }
   };
   bool found_circle = path.detect_circle(find_circle);

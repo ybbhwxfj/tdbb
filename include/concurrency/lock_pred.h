@@ -1,7 +1,7 @@
 #pragma once
 
-#include <boost/icl/interval_map.hpp>
 #include "common/id.h"
+#include <boost/icl/interval_map.hpp>
 
 typedef boost::icl::interval<tuple_id_t>::type interval;
 

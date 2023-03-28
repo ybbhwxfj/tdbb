@@ -5,16 +5,16 @@
 #ifdef DB_TYPE_NON_DETERMINISTIC
 #ifdef DB_TYPE_SHARE_NOTHING
 
+#include "common/enum_str.h"
 #include "common/error_code.h"
 #include "common/result.hpp"
-#include "common/enum_str.h"
 #include "concurrency/write_ahead_log.h"
 #include "network/connection.h"
 #include "network/net_service.h"
 #include "proto/proto.h"
+#include <functional>
 #include <mutex>
 #include <unordered_map>
-#include <functional>
 
 enum tm_state {
   TM_IDLE,
@@ -33,13 +33,13 @@ enum tm_trace_state {
 
 typedef std::function<void(uint64_t xid, tm_state)> fn_tm_state;
 
-template<>
-enum_strings<tm_state>::e2s_t  enum_strings<tm_state>::enum2str;
+template<> enum_strings<tm_state>::e2s_t enum_strings<tm_state>::enum2str;
 template<>
 enum_strings<tm_trace_state>::e2s_t enum_strings<tm_trace_state>::enum2str;
 
-class tx_coordinator : public std::enable_shared_from_this<tx_coordinator>, public tx_base {
- private:
+class tx_coordinator : public std::enable_shared_from_this<tx_coordinator>,
+                       public tx_base {
+private:
   enum tx_rm_state {
     RM_IDLE,
     RM_PREPARE_COMMIT,
@@ -49,24 +49,18 @@ class tx_coordinator : public std::enable_shared_from_this<tx_coordinator>, publ
   };
 
   struct tx_rm_tracer {
-    tx_rm_tracer() :
-        lead_(0),
-        rm_state_(RM_IDLE) {
-#ifdef DB_TYPE_GEO_REP_OPTIMIZE
-      violate_ = false;
-#endif // DB_TYPE_GEO_REP_OPTIMIZE
+    tx_rm_tracer() : lead_(0), rm_state_(RM_IDLE) {
     }
 
     node_id_t lead_;
     tx_rm_state rm_state_;
-#ifdef DB_TYPE_GEO_REP_OPTIMIZE
-    bool violate_;
-#endif // DB_TYPE_GEO_REP_OPTIMIZE
+
     tx_request message_;
   };
 
   uint64_t xid_;
   node_id_t node_id_;
+  std::string node_name_;
   std::unordered_map<shard_id_t, node_id_t> lead_node_;
   net_service *service_;
   ptr<connection> connection_;
@@ -96,14 +90,13 @@ class tx_coordinator : public std::enable_shared_from_this<tx_coordinator>, publ
   uint32_t num_lock_;
   uint32_t num_read_violate_;
   uint32_t num_write_violate_;
- public:
-  tx_coordinator(
-      boost::asio::io_context::strand s,
-      uint64_t xid, uint32_t node_id,
-      std::unordered_map<shard_id_t, node_id_t> lead_node,
-      net_service *service, ptr<connection> connection, write_ahead_log *write_ahead_log,
-      fn_tm_state fn
-  );
+
+public:
+  tx_coordinator(boost::asio::io_context::strand s, uint64_t xid,
+                 uint32_t node_id,
+                 std::unordered_map<shard_id_t, node_id_t> lead_node,
+                 net_service *service, ptr<connection> connection,
+                 write_ahead_log *write_ahead_log, fn_tm_state fn);
 
   uint64_t xid() const { return xid_; }
 
@@ -125,12 +118,7 @@ class tx_coordinator : public std::enable_shared_from_this<tx_coordinator>, publ
 
   void on_log_entry_commit(tx_cmd_type type);
 
-#ifdef DB_TYPE_GEO_REP_OPTIMIZE
-
-  void handle_tx_enable_violate(const tx_enable_violate &msg);
-
-#endif // DB_TYPE_GEO_REP_OPTIMIZE
- private:
+private:
   void send_commit();
 
   void send_abort();
@@ -153,11 +141,6 @@ class tx_coordinator : public std::enable_shared_from_this<tx_coordinator>, publ
 
   void send_tx_response();
 
-#ifdef DB_TYPE_GEO_REP_OPTIMIZE
-
-  void send_tx_enable_violate();
-
-#endif // DB_TYPE_GEO_REP_OPTIMIZE
 };
 
 #endif // DB_TYPE_SHARE_NOTHING

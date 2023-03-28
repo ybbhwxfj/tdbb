@@ -1,4 +1,4 @@
-export LD_LIBRARY_PATH=/usr/local/mysql/lib/mysql/
+export LD_LIBRARY_PATH=/usr/local/mysql/lib/mysql/:/usr/local/lib/
 DBNAME=$1
 WH=$2
 USER=$3

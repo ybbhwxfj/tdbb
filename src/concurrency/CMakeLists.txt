@@ -12,7 +12,7 @@ set(src_files
         calvin_scheduler.cpp
         calvin_context.cpp
         calvin_collector.cpp
-        deadlock.cpp)
+        deadlock.cpp ../../include/portal/block_client.h)
 
 set(cc_lib concurrency)
 add_library(${cc_lib} ${src_files})

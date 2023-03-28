@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
 import argparse
 import json
+import multiprocessing
 import os
-import paramiko
 import pathlib
 import re
 import shutil
 import stat
 import subprocess
 import time
+
+import paramiko
 
 # NUM_ITEM = 100
 # CUST_PER_DIST = 10
@@ -22,11 +24,16 @@ DIST_PER_WARE = 10
 ORD_PER_DIST = 1000
 MAX_NUM_ITEMS = 15
 HOT_ITEM_NUM = 10
-NUM_WAREHOUSE = 40
-NUM_TRANSACTIONS = 100000
-APPEND_LOG_ENTRIES_BATCH_MIN = 10
 
-THREADS_ASYNC_CONTEXT = 10
+NUM_READ_ONLY_ROWS = 500
+ADDITIONAL_READ_ONLY = False
+
+APPEND_LOG_ENTRIES_BATCH_MIN = 1
+APPEND_LOG_ENTRIES_BATCH_MAX = 32
+
+THREADS_ASYNC_CONTEXT = 4
+THREADS_CC = 4
+THREADS_REPLICATION = 1
 THREADS_IO = 10
 CONNECTIONS_PER_PEER = 10
 MYSQL_TPCC_RUN_SECONDS = 100
@@ -35,17 +42,26 @@ MYSQL_MAX_CONNECTIONS = 2500
 SSH_SERVER_PORT = 22
 RETRY_AFTER_EXCEPTION = 500
 WAN_LATENCY_DELAY_WAIT_MS = 0
-CACHED_TUPLE_PERCENTAGE = 0.8
-AZ_RTT_LATENCY_MS = 10
-CALVIN_EPOCH_MS = 50
-NUM_OUTPUT_RESULT = 100
-DEFAULT_NUM_TERMINAL = 200
+CACHED_TUPLE_PERCENTAGE = 0.2
+DIST_PERCENTAGE = False
+RAFT_FOLLOWER_TICK_MAX_REQUEST_VOTE = 40
+RAFT_LEADER_ELECTION_TICK_MS = 200
+
+AZ_RTT_LATENCY_MS = 40
+DEADLOCK_DETECTION = False
+DEADLOCK_DETECTION_MS = 1000
+LOCK_TIMEOUT_MS = 500
+CALVIN_EPOCH_MS = 20
+NUM_OUTPUT_RESULT = 80
 
 NODE_MYSQL_CONF = 'node.mysql.conf.json'
-NODE_SHARE_TIGHT_CONF = "node.conf.sdb.b.json"
-NODE_SHARE_LOOSE_CONF = "node.conf.sdb.ub.json"
+NODE_SHARE_TIGHT_CONF = "node.conf.sdb.tb.json"
+NODE_SHARE_LOOSE_CONF = "node.conf.sdb.lb.json"
 NODE_SHARE_NOTHING_CONF = "node.conf.sndb.json"
+NODE_SHARE_CCB_DSB_CONF = "node.conf.scrdb.json"
 USER_CONF = "user.conf.json"
+USER_ROOT_CONF = "user.root.conf.json"
+
 
 BLOCK_CONF = "block.json"
 TPCC_SCHEMA = 'tpcc_schema.json'
@@ -60,31 +76,55 @@ PY_PATH = os.path.join(BLOCK_PROJECT_PATH, 'py')
 BINARY_PATH = os.path.join(BLOCK_PROJECT_PATH, 'bin')
 CONF_PATH = os.path.join(BLOCK_PROJECT_PATH, 'conf')
 
-TEST_CACHED_PERCENTAGE = [0.2, 0.8]
-MYSQL_TERMINALS = [50, 100, 150, 200, 250, 300]
-BIND_TERMINALS = [50, 100, 150, 200, 250, 300]
-TERMINALS = [100, 200, 300, 400, 500, 600]
+DEFAULT_TEST_CACHED_PERCENTAGE = 0.2
 
-WAREHOUSES = [20, 40, 60, 80, 100]
-CONTENTED_TERMINALS = [50, 100, 150, 200, 250, 300]
+MYSQL_TERMINALS = [50, 100, 150, 200]
+DEFAULT_NUM_TERMINAL = 160
+NUM_TERMINAL_ARRAY = [160]
+
+DEFAULT_PERCENT_REMOTE_WH = 0.01
+PERCENT_REMOTE_WH_ARRAY = [0.01, 0.25, 0.5]
+CCB_CACHED_PERCENTAGE_ARRAY = [0.0, 0.25, 0.5, 0.75, 1.0]
+PERCENT_READ_ONLY = [0.0, 0.25, 0.5, 0.75, 1.0]
+
+NUM_WAREHOUSE = 160
+WAREHOUSES = [160]
+
+TEST_CACHE = 'cache'
+TEST_DISTRIBUTE = 'distribute'
+TEST_TERMINAL = 'terminal'
+TEST_READ_ONLY = 'readonly'
+
+DB_CONFIG_SLB = 'lb'
+DB_CONFIG_STB = 'tb'
+DB_CONFIG_SN = 'sn'
+DB_CONFIG_SCR = 'scr'
+DB_CONFIG_MYSQL = 'mysql'
 
 TEST_NODE_CONF_BINDING = {NODE_SHARE_LOOSE_CONF: 'l', NODE_SHARE_TIGHT_CONF: 't'}
 TEST_NODE_CONF_DISTRIBUTED = {NODE_SHARE_NOTHING_CONF: 'dist'}
 DB_S = 'db-s'
 DB_TYPE_DISTRIBUTED = ['db-sn', 'db-d']
+DB_TYPE_SN_LOCKING = ['db-sn']
+DB_TYPE_SCR = ['db-scr']
+NUM_TRANSACTIONS = {'db-sn': 800000, 'db-d': 800000, 'db-s': 400000, 'db-scr': 800000}
 
 MYSQL_PORT = 3306
 MYSQL_X_PORT = 33060  # mysqldump needed
 MYSQL_MGR_PORT = 33061
 
 
-def config_file_name(distributed=True, tight_binding=True):
-    if distributed:
+def config_file_name(db_config_type="sn"):
+    if db_config_type == DB_CONFIG_SCR:
+        return NODE_SHARE_CCB_DSB_CONF
+    elif db_config_type == DB_CONFIG_SN:
         return NODE_SHARE_NOTHING_CONF
-    elif tight_binding:
+    elif db_config_type == DB_CONFIG_STB:
         return NODE_SHARE_TIGHT_CONF
-    else:
+    elif db_config_type == DB_CONFIG_SLB:
         return NODE_SHARE_LOOSE_CONF
+    elif db_config_type == DB_CONFIG_MYSQL:
+        return NODE_MYSQL_CONF
 
 
 class SFTPClientWrapper(paramiko.SFTPClient):
@@ -111,11 +151,20 @@ class SFTPClientWrapper(paramiko.SFTPClient):
                 raise
 
 
-def get_user_password():
-    user_conf = os.path.join(CONF_PATH, USER_CONF)
+def get_user_password(user_name=None, user_conf=USER_CONF):
+    user_conf = os.path.join(CONF_PATH, user_conf)
     user_json = load_json_file(user_conf)
     user = user_json['user']
     password = user_json['password']
+    if user_name is not None and user != user_name:
+        if user_name == 'root':
+            user_conf = os.path.join(CONF_PATH, USER_ROOT_CONF)
+            user_json = load_json_file(user_conf)
+            user = user_json['user']
+            password = user_json['password']
+        else:
+            print("unknown user name {}".format(user_name))
+            exit(-1)
     return user, password
 
 
@@ -169,6 +218,14 @@ def rsync_to_remote(source_path, username, host, target_path):
     print(output)
 
 
+def user_home(user):
+    if user == 'root':
+        home = '/root'
+    else:
+        home = '/home/{}'.format(user)
+    return home
+
+
 def load_json_file(path):
     with open(path, 'r') as file:
         text = file.read()
@@ -195,33 +252,32 @@ def gen_priority(node_server):
 
 
 def run_bench(num_terminal=DEFAULT_NUM_TERMINAL,
-              percent_distributed=0.0,
+              percent_remote=DEFAULT_PERCENT_REMOTE_WH,
               percent_hot_item=0.0,
+              percent_read_only=0.0,
               num_warehouse=NUM_WAREHOUSE,
               num_item=NUM_ITEM,
               dist_per_ware=DIST_PER_WARE,
               db_type='db-s', label='xxx',
               conf_file=NODE_SHARE_TIGHT_CONF,
               tight_binding=True,
-              cached_tuple_percentage=CACHED_TUPLE_PERCENTAGE,
+              percent_cached_tuple=CACHED_TUPLE_PERCENTAGE,
+              control_percent_dist_tx=DIST_PERCENTAGE,
               ):
     path_node_configure_file = os.path.join(CONF_PATH, conf_file)
     conf_map = load_json_file(path_node_configure_file)
     name2path = {}
     node_server = conf_map['node_server_list'].copy()
-    node_client = conf_map['node_client'].copy()
-    node_panel = conf_map['node_panel'].copy()
+    node_client = conf_map['node_client_list'].copy()
 
-    node_list = node_server.copy()
-    node_list.append(node_client)
-    node_list.append(node_panel)
+    node_list = node_server + node_client
 
     az_priority = gen_priority(node_server)
     for node in node_server:
         az = node['zone_name']
         if node['zone_name'] in az_priority:
             node['priority'] = az_priority[az]
-
+    num_transactions = NUM_TRANSACTIONS[db_type]
     tpcc_config = {
         'num_warehouse': num_warehouse,
         'num_item': num_item,
@@ -230,13 +286,20 @@ def run_bench(num_terminal=DEFAULT_NUM_TERMINAL,
         'num_max_order_line': MAX_NUM_ITEMS,
         'num_terminal': num_terminal,
         'num_customer_per_district': CUST_PER_DIST,
-        'num_new_order': NUM_TRANSACTIONS,
+        'num_new_order': num_transactions,
         'percent_non_exist_item': 0,
         'percent_hot_item': percent_hot_item,
+        'percent_read_only': percent_read_only,
+        'num_read_only_rows': NUM_READ_ONLY_ROWS,
+        'additional_read_only_terminal': ADDITIONAL_READ_ONLY,
         'hot_item_num': HOT_ITEM_NUM,
-        'percent_distributed': percent_distributed,
-        "raft_follow_tick_num": 20,
-        "raft_leader_tick_ms": AZ_RTT_LATENCY_MS,
+        # remove warehouse or shard
+        'percent_remote': percent_remote,
+        # when this true, percent_remote is the remote shard percentage,
+        # otherwise, it is warehouse percentage
+        "control_percent_dist_tx": control_percent_dist_tx,
+        "raft_follow_tick_num": RAFT_FOLLOWER_TICK_MAX_REQUEST_VOTE,
+        "raft_leader_election_tick_ms": RAFT_LEADER_ELECTION_TICK_MS,
         "calvin_epoch_ms": CALVIN_EPOCH_MS,
         "num_output_result": NUM_OUTPUT_RESULT,
         "az_rtt_ms": AZ_RTT_LATENCY_MS,
@@ -245,27 +308,45 @@ def run_bench(num_terminal=DEFAULT_NUM_TERMINAL,
 
     test_conf = {
         'wan_latency_delay_wait_ms': WAN_LATENCY_DELAY_WAIT_MS,
-        'cached_tuple_percentage': cached_tuple_percentage,
+        'percent_cached_tuple': percent_cached_tuple,
+        'deadlock_detection_ms': DEADLOCK_DETECTION_MS,
+        'deadlock_detection': DEADLOCK_DETECTION,
+        'lock_timeout_ms': LOCK_TIMEOUT_MS,
         'label': label,
         'parameter': ''
     }
 
+    processors = []
+    receivers = []
     for node in node_list:
         is_client = len(node['block_type']) == 1 and node['block_type'][0] == 'CLIENT'
-        (name, path) = configure_node(
-            server_node_conf_list=node_server,
-            client_node_conf=node_client,
-            panel_node_conf=node_panel,
-            tpcc_config=tpcc_config,
-            test_conf=test_conf,
-            address=node['address'],
-            node_name=node['node_name'],
-            binding_node_name=node['node_name'],
-            db_type=db_type,
-            is_backend=not is_client,
-            label=label,
-            az_priority=az_priority
+        receiver, sender = multiprocessing.Pipe(duplex=False)
+        p = multiprocessing.Process(
+            target=process_configure_node,
+            args=(
+                sender,
+                node_server,
+                node_client,
+                tpcc_config,
+                test_conf,
+                node['address'],
+                node['node_name'],
+                node['node_name'],
+                db_type,
+                not is_client,
+                label,
+                az_priority,
+            )
         )
+        receivers.append(receiver)
+        processors.append(p)
+    for p in processors:
+        p.start()
+    for p in processors:
+        p.join()
+    for r in receivers:
+        (name, path) = r.recv()
+        print("receive from PIPE, name:{}, path:{}".format(name, path))
         name2path[name] = path
 
     output_result = {
@@ -275,28 +356,68 @@ def run_bench(num_terminal=DEFAULT_NUM_TERMINAL,
         'binding': tight_binding,
         'warehouses': num_warehouse,
         'num_item': num_item,
-        'percent_distributed': percent_distributed,
+        'percent_remote': percent_remote,
         'percent_hot_item': percent_hot_item,
-        'cached_tuple_percentage': cached_tuple_percentage,
+        'percent_cached_tuple': percent_cached_tuple,
+        'percent_read_only': percent_read_only,
+        'control_dist_tx':control_percent_dist_tx,
     }
 
+    # process server
     servers = node_server.copy()
-    servers.append(node_panel)
+    clients = node_client.copy()
+    processors = []
     for node in servers:
         node_name = node['node_name']
         node_path = name2path[node_name]
+        address = node['address']
+        p = multiprocessing.Process(
+            target=process_run_block,
+            args=(address, node_path, True, None)
+        )
+        processors.append(p)
+    for p in processors:
+        p.start()
+    for p in processors:
+        p.join()
 
-        run_block(node['address'], node_path, True, output_result)
+    # process client ...
+    processors = []
+    for i in range(len(clients)):
+        node = clients[i]
+        node_name = node['node_name']
+        node_path = name2path[node_name]
+        address = node['address']
+        result_json = None
+        # if the last one, run at local node and output the json result
+        if i + 1 == len(clients):
+            result_json = output_result
+        p = multiprocessing.Process(
+            target=process_run_client,
+            args=(address, node_path, False, result_json, node_name)
+        )
+        processors.append(p)
+    for p in processors:
+        p.start()
+    for p in processors:
+        p.join()
 
-    client_path = name2path[node_client['node_name']]
-    run_block(node_client['address'], client_path, False, output_result)
-    json_file = os.path.join(client_path, 'output.txt')
-    with open(json_file, 'w') as file:
-        file.write(json.dumps(output_result) + '\n')
-    file.close()
+
+def process_run_client(address, run_dir, backend, output_result, name):
+    process_run_block(address, run_dir, backend, output_result)
+    output = 'output_{}.txt'.format(name)
+    if output_result is not None:
+        json_file = os.path.join(run_dir, output)
+        with open(json_file, 'w') as file:
+            file.write(json.dumps(output_result) + '\n')
+        file.close()
 
 
-def run_block(address, run_dir, backend, output_result):
+def process_run_block(address, run_dir, backend, output_result):
+    run_block(address, run_dir, backend, output_result)
+
+
+def run_block(address, run_dir, backend, output_result=None):
     if backend:
         run_cmd = 'cd {}\n' \
                   'ulimit -c unlimited\n' \
@@ -307,7 +428,7 @@ def run_block(address, run_dir, backend, output_result):
                   'ulimit -c unlimited\n' \
                   ' nohup {}/{} > fe.out 2>&1 </dev/null & \n'.format(run_dir,
                                                                       run_dir, STARTUP_SCRIPT)
-    if backend:
+    if output_result is None:
         user, password = get_user_password()
         # print(run_cmd)
         run_command_remote(username=user, password=password, host=address, shell_command=run_cmd)
@@ -331,10 +452,41 @@ def run_block(address, run_dir, backend, output_result):
         output_result['lt_part'] = result['lt_part']
 
 
+def process_configure_node(
+        pipe,
+        server_node_conf_list,
+        client_node_conf,
+        tpcc_config,
+        test_conf,
+        address,
+        node_name,
+        binding_node_name,
+        db_type,
+        is_backend,
+        label,
+        az_priority
+):
+    (name, path) = configure_node(
+        server_node_conf_list,
+        client_node_conf,
+        tpcc_config,
+        test_conf,
+        address,
+        node_name,
+        binding_node_name,
+        db_type,
+        is_backend,
+        label,
+        az_priority
+    )
+    pipe.send((name, path))
+    pipe.close()
+    print("send to PIPE, name:{}, path:{}".format(name, path))
+
+
 def configure_node(
         server_node_conf_list,
         client_node_conf,
-        panel_node_conf,
         tpcc_config,
         test_conf,
         address,
@@ -367,8 +519,11 @@ def configure_node(
         'az_priority': az_priority,
         'threads_async_context': THREADS_ASYNC_CONTEXT,
         'threads_io': THREADS_IO,
+        'threads_cc': THREADS_CC,
+        'threads_replication': THREADS_REPLICATION,
         'connections_per_peer': CONNECTIONS_PER_PEER,
         'append_log_entries_batch_min': APPEND_LOG_ENTRIES_BATCH_MIN,
+        'append_log_entries_batch_max': APPEND_LOG_ENTRIES_BATCH_MAX,
     }
 
     configure = {
@@ -376,8 +531,7 @@ def configure_node(
         'param': tpcc_config,
         'test': test_conf,
         'node_server_list': server_node_conf_list,
-        'node_client': client_node_conf,
-        'node_panel': panel_node_conf,
+        'node_client_list': client_node_conf,
     }
 
     block_conf_file = os.path.join(local_tmp, BLOCK_CONF)
@@ -421,10 +575,10 @@ def clean_all(conf_file, clean_run_dir=False):
     path_node_configure_file = os.path.join(CONF_PATH, conf_file)
     conf_map = load_json_file(path_node_configure_file)
     node_server = conf_map['node_server_list'].copy()
-    node_server.append(conf_map['node_panel'].copy())
+    node_client = conf_map['node_client_list'].copy()
     user, password = get_user_password()
-
-    for node in node_server:
+    node_list = node_server + node_client
+    for node in node_list:
         clean_cmd = 'pkill -f {} || true \n'.format(BINARY_BLOCK_DB)
         run_command_remote(user, password, node['address'], clean_cmd)
         clean_cmd = 'pkill -f {} || true \n'.format(BINARY_BLOCK_CLIENT)
@@ -437,7 +591,7 @@ def clean_all(conf_file, clean_run_dir=False):
 
 
 def evaluation_contention(conf_path):
-    percent_distributed = 0.1
+    percent_remote = 0.1
     for db_type in DB_TYPE_DISTRIBUTED:
         for percent_hot in [0.0, 0.1, 0.2]:
             term = DEFAULT_NUM_TERMINAL
@@ -446,7 +600,7 @@ def evaluation_contention(conf_path):
             run_bench(num_terminal=term,
                       num_warehouse=NUM_WAREHOUSE,
                       num_item=NUM_ITEM,
-                      percent_distributed=percent_distributed,
+                      percent_remote=percent_remote,
                       percent_hot_item=percent_hot,
                       db_type=db_type,
                       label=label,
@@ -455,7 +609,7 @@ def evaluation_contention(conf_path):
 
 
 def evaluation_warehouse(conf_path):
-    percent_distributed = 0.1
+    percent_remote = 0.1
     for db_type in DB_TYPE_DISTRIBUTED:
         for warehouse in WAREHOUSES:
             term = DEFAULT_NUM_TERMINAL
@@ -464,53 +618,124 @@ def evaluation_warehouse(conf_path):
             run_bench(num_terminal=term,
                       num_warehouse=warehouse,
                       num_item=NUM_ITEM,
-                      percent_distributed=percent_distributed,
+                      percent_remote=percent_remote,
                       db_type=db_type,
                       label=label,
                       conf_file=conf_path,
                       tight_binding=True)
 
 
-def evaluation_distributed(conf_path):
-    percent_distributed = 0.1
-    for wh_item in [
-        (NUM_WAREHOUSE, NUM_ITEM, '-uc', TERMINALS)
-    ]:
-        num_warehouse = wh_item[0]
-        num_item = wh_item[1]
-        for db_type in DB_TYPE_DISTRIBUTED:
-            for term in wh_item[3]:
+def evaluation_ratio_read_only_tx(
+        conf_path,
+        db_types,
+        num_item=NUM_ITEM,
+        array_num_warehouse=None,
+        array_num_terminal=None,
+        control_percent_dist_tx=DIST_PERCENTAGE,
+):
+    if array_num_warehouse is None:
+        array_num_warehouse = WAREHOUSES
+    if array_num_terminal is None:
+        array_num_terminal = [DEFAULT_NUM_TERMINAL]
+    for db_type in db_types:
+        for read_only in PERCENT_READ_ONLY:
+            for num_warehouse in array_num_warehouse:
+                for term in array_num_terminal:
+                    clean_all(conf_path)
+                    label = 'dist'
+                    run_bench(num_terminal=term,
+                              num_warehouse=num_warehouse,
+                              num_item=num_item,
+                              percent_read_only=read_only,
+                              db_type=db_type,
+                              label=label,
+                              conf_file=conf_path,
+                              tight_binding=True,
+                              control_percent_dist_tx=control_percent_dist_tx,
+                              )
+
+
+def evaluation_distributed(
+        conf_path,
+        db_types=DB_TYPE_DISTRIBUTED,
+        num_item=NUM_ITEM,
+        array_num_warehouse=None,
+        array_percent_remote_wh=None,
+        array_num_terminal=None,
+        control_percent_dist_tx=DIST_PERCENTAGE,
+):
+    if array_num_warehouse is None:
+        array_num_warehouse = WAREHOUSES
+    if array_num_terminal is None:
+        array_num_terminal = [DEFAULT_NUM_TERMINAL]
+    if array_percent_remote_wh is None:
+        array_percent_remote_wh = [DEFAULT_PERCENT_REMOTE_WH]
+    for db_type in db_types:
+        for percent_remote in array_percent_remote_wh:
+            for num_warehouse in array_num_warehouse:
+                for term in array_num_terminal:
+                    clean_all(conf_path)
+                    label = 'dist'
+                    run_bench(num_terminal=term,
+                              num_warehouse=num_warehouse,
+                              num_item=num_item,
+                              percent_remote=percent_remote,
+                              db_type=db_type,
+                              label=label,
+                              conf_file=conf_path,
+                              tight_binding=True,
+                              control_percent_dist_tx=control_percent_dist_tx,
+                              )
+
+
+def evaluation_block_binding(
+        conf_path,
+        tight_binding=True,
+        num_terminal_array=None,
+        cached_percentage_array=None,
+        percent_read_only=None,
+):
+    if cached_percentage_array is None:
+        cached_percentage_array = [DEFAULT_TEST_CACHED_PERCENTAGE]
+    if num_terminal_array is None:
+        num_terminal_array = [DEFAULT_NUM_TERMINAL]
+    if percent_read_only is None:
+        percent_read_only = [0.0]
+    if tight_binding:
+        label = 'tight_bind'
+    else:
+        label = 'loose_bind'
+    db_type = DB_S
+    num_warehouse = NUM_WAREHOUSE
+    percent_remote = DEFAULT_PERCENT_REMOTE_WH
+    for term in num_terminal_array:
+        for percentage in cached_percentage_array:
+            for read_only in percent_read_only:
                 clean_all(conf_path)
-                label = 'dist' + wh_item[2]
                 run_bench(num_terminal=term,
                           num_warehouse=num_warehouse,
-                          num_item=num_item,
-                          percent_distributed=percent_distributed,
+                          percent_read_only=read_only,
+                          percent_remote=percent_remote,
                           db_type=db_type,
                           label=label,
                           conf_file=conf_path,
-                          tight_binding=True)
+                          tight_binding=tight_binding,
+                          percent_cached_tuple=percentage)
 
 
-def evaluation_block_binding(conf_path, tight_binding=True):
-    if tight_binding:
-        label = 'bind'
+def tc_set_command(ip, delay=None, rate=None):
+    if delay is None:
+        delay_s = ''
     else:
-        label = 'unbind'
-    db_type = DB_S
-    num_warehouse = NUM_WAREHOUSE
-    percent_distributed = 0.0
-    for term in BIND_TERMINALS:
-        for percentage in TEST_CACHED_PERCENTAGE:
-            clean_all(conf_path)
-            run_bench(num_terminal=term,
-                      num_warehouse=num_warehouse,
-                      percent_distributed=percent_distributed,
-                      db_type=db_type,
-                      label=label,
-                      conf_file=conf_path,
-                      tight_binding=tight_binding,
-                      cached_tuple_percentage=percentage)
+        delay_s = ' --delay {}ms '.format(delay)
+    if rate is None:
+        rate_s = ''
+    else:
+        rate_s = ' --rate {}Mbps '.format(rate)
+    cmd = '''
+tcset eth0 {} {} --network {} 
+'''.format(delay_s, rate_s, ip)
+    return cmd
 
 
 def tc_command(ip, delay):
@@ -526,10 +751,10 @@ tc qdisc add dev $interface parent 1:1 handle 2: netem delay $delay
     return cmd
 
 
-def tc_command_list(address_list, delay):
+def tc_command_list(address_list, delay, rate):
     cmd = ""
     for address in address_list:
-        cmd = cmd + tc_command(address, delay)
+        cmd = cmd + tc_set_command(address, delay, rate)
     return cmd
 
 
@@ -539,26 +764,33 @@ def get_nodes(conf_file, all_node=True):
     node_server = conf_map['node_server_list'].copy()
     node = node_server
     if all_node:
-        node_client = conf_map['node_client'].copy()
-        node.append(node_client)
+        node_client = conf_map['node_client_list'].copy()
+        node = node + node_client
     return node
 
 
-def config_latency(conf_file, latency, wan=True):
-    node = get_nodes(conf_file, all_node=False)
-    user, password = get_user_password()
+def config_latency(conf_file, wan_latency, lan_latency, bandwidth_wan, use_private_address=False):
+    node = get_nodes(conf_file, all_node=True)
+    user, password = get_user_password(user_name='root')
+    if use_private_address:
+        address_s = "private_address"
+    else:
+        address_s = "address"
     for n in node:
-        access_address = []
+        wan_access_address = []
+        lan_access_address = []
         for n1 in node:
             if n['node_name'] != n1['node_name']:
-                if wan:
-                    if n['zone_name'] != n1['zone_name']:
-                        access_address.append(n1['address'])
+                if n['zone_name'] != n1['zone_name']:
+                    print("not in one AZ:", n['zone_name'], n1['zone_name'])
+                    wan_access_address.append(n1[address_s])
                 else:
-                    if n['zone_name'] == n1['zone_name']:
-                        access_address.append(n1['address'])
-        cmd = tc_command_list(access_address, latency)
-        run_command_remote(username=user, password=password, host=n['address'], shell_command=cmd)
+                    print("in one AZ:", n['zone_name'], n1['zone_name'])
+                    lan_access_address.append(n1[address_s])
+        cmd1 = tc_command_list(wan_access_address, wan_latency, bandwidth_wan)
+        cmd2 = tc_command_list(lan_access_address, lan_latency, None)
+        cmd = cmd1 + cmd2
+        run_command_remote(username=user, password=password, host=n[address_s], shell_command=cmd)
 
 
 def execute_command(conf_file, shell_command):
@@ -569,8 +801,8 @@ def execute_command(conf_file, shell_command):
         run_command_remote(username=user, password=password, host=n['address'], shell_command=shell_command)
 
 
-def mysql_load_data(conf_file, warehouse):
-    mysql_init_bench_tpcc(conf_file, warehouse=warehouse)
+def mysql_load_data(conf_file, load=False):
+    mysql_init_bench_tpcc(conf_file, load)
 
 
 def mysql_run_evaluation(conf_file, warehouse):
@@ -580,7 +812,7 @@ def mysql_run_evaluation(conf_file, warehouse):
 
 # local_address s1:33061
 # group_seeds s1:33061,s2:33061,s3:33061
-def mysql_cnf(datadir, server_id, local_address, group_seeds):
+def mysql_cnf(datadir, server_id, mysql_x_bind_address, local_address, group_seeds):
     my_cnf = '''\
 [mysql]
 port            = {}
@@ -596,7 +828,7 @@ socket          = {}/mysqld.sock
 mysqlx_socket   = {}/mysqlx.sock
 log_error       = {}/error.log
 datadir         = {}/data
-mysqlx_bind_address = "0.0.0.0"
+mysqlx_bind_address = "{}"
 mysqlx_port = {}
 connect_timeout = 20
 net_read_timeout = 60
@@ -625,6 +857,7 @@ loose-group_replication_bootstrap_group=off
            MYSQL_PORT, datadir,
            MYSQL_PORT, datadir,
            datadir, datadir, datadir, datadir,
+           mysql_x_bind_address,
            MYSQL_X_PORT,  # mysqlx_port
            MYSQL_MAX_CONNECTIONS, server_id, local_address, group_seeds)
     return my_cnf
@@ -679,16 +912,25 @@ export MAX_ITEM_LEN=14
     return env
 
 
-remote_mgr_sql = '/home/mysql/mysql_data/mgr_privilege.sql'
-remote_grant_sql = '/home/mysql/mysql_data/user_privilege.sql'
-remote_bootstrap_sql = '/home/mysql/mysql_data/bootstrap.sql'
-remote_bootstrap_sql_single_leader_on = '/home/mysql/mysql_data/bootstrap_single_leader_on.sql'
 # remote_bin = '/home/mysql/block-db/bin'
 mysql_root_user = 'root'
 mysql_root_password = 'root'
 mysql_db_name = 'tpcc'
-mysql_homedir = '/home/mysql/'
-mysql_datadir = '/home/mysql/mysql_data'
+
+
+def mysql_datadir(user):
+    d = '{}/mysql_data'.format(user_home(user))
+    return d
+
+
+def remote_grant_sql(user):
+    d = '{}/user_privilege.sql'.format(mysql_datadir(user))
+    return d
+
+
+def remote_bootstrap_sql(user):
+    d = '{}/bootstrap_single_leader_on.sql'.format(mysql_datadir(user))
+    return d
 
 
 def mysql_run_bench_tpcc(conf_file, terminal, warehouse):
@@ -696,8 +938,10 @@ def mysql_run_bench_tpcc(conf_file, terminal, warehouse):
     conf_map = load_json_file(path_node_configure_file)
     node_server = conf_map['node_server_list'].copy()
     print("-------- MYSQL TPCC run benchmark --------")
-    master_server_address = node_server[0]['address']
+    # use the last
+    master_server_address = node_server[len(node_server) - 1]['private_address']
     cmd_run_tpcc = '''\
+export LD_LIBRARY_PATH=/usr/local/mysql/lib/mysql/:/usr/local/lib/
 {}
 tpcc_mysql_bench -h{} -P{} -d{} -u{} -p{} -w{} -c{} -r10 -l{}
 '''.format(tpcc_environment_variable(),
@@ -723,8 +967,8 @@ tpcc_mysql_bench -h{} -P{} -d{} -u{} -p{} -w{} -c{} -r10 -l{}
                 'binding': True,
                 'warehouses': warehouse,
                 'num_item': NUM_ITEM,
-                'percent_distributed': 0,
-                'cached_tuple_percentage':0.0,
+                'percent_remote': 0,
+                'percent_cached_tuple': 0.0,
                 'tpm': tpm,
                 'abort': 0.0,
             }
@@ -744,14 +988,14 @@ def mysql_dump_data(conf_file, warehouse):
     conf_map = load_json_file(path_node_configure_file)
     user, password = get_user_password()
     node_server = conf_map['node_server_list'].copy()
-    node_client = conf_map['node_client'].copy()
-    address = node_client['address']
+    node_client = conf_map['node_client_list'].copy()[0]
+    address = node_client['private_address']
     mysql_clean(user, password, address)
     hosts, group_seeds = mysql_gen_all_host_seeds(node_server, node_client)
     mysql_init_data_dir(user, password, 0, address, hosts, group_seeds)
     mysqld_startup(user, password, address)
     while True:
-        cmd = 'mysql -u root --skip-password -f < {} \n'.format(remote_grant_sql)
+        cmd = 'mysql -u root --skip-password -f < {} \n'.format(remote_grant_sql(user))
         print(cmd)
         ec, _, _ = run_command_remote(username=user, password=password, host=address, shell_command=cmd)
         if ec == 0:
@@ -759,11 +1003,11 @@ def mysql_dump_data(conf_file, warehouse):
         time.sleep(1)
 
     mysql_create_schema(user, password, address)
-    mysql_load_run(address, warehouse)
+    mysql_load_run(user, address, warehouse)
 
-    cmd = 'mysqldump -u root -p {} --init-command="SET SQL_LOG_BIN = 0;"  > {}/mysql/{}.sql'.format(mysql_db_name,
-                                                                                                    BLOCK_PROJECT_PATH,
-                                                                                                    mysql_db_name)
+    cmd = 'mysqldump -u root -p {}  > {}/mysql/{}.sql'.format(mysql_db_name,
+                                                              BLOCK_PROJECT_PATH,
+                                                              mysql_db_name)
     run_shell_command(cmd)
 
 
@@ -774,42 +1018,61 @@ def mysql_clean(user, password, address):
     run_command_remote(user, password, address, clean_cmd)
 
     print("-------- MYSQL TPCC rm mysql DB directory {} --------".format(address))
+    home = user_home(user)
     clean_cmd = '''\
-    rm -rf /home/mysql/mysql_data
-    rm -rf /home/mysql/.my.cnf
-    mkdir -p /home/mysql/mysql_data
+    rm -rf {}/mysql_data
+    rm -rf {}/.my.cnf
+    mkdir -p {}/mysql_data
     ls -s
-    '''
+    '''.format(home, home, home)
     run_command_remote(user, password, address, clean_cmd)
 
 
-def mysql_init_data_dir(user, password, server_id, address, hosts, group_seeds, copy_data=False):
+def write_bootstrap_sql(bootstrap_group, path):
+    with open('{}/bootstrap_single_leader_on.sql'.format(path), 'w') as file:
+        sql = mgr_bootstrapping(bootstrap_group, True)
+        file.write(sql)
+    with open('{}/bootstrap.sql'.format(path), 'w') as file:
+        sql = mgr_bootstrapping(bootstrap_group, False)
+        file.write(sql)
+
+
+def mysql_init_data_dir_without_loading(user, address, bootstrap_group=False):
+    print("-------- MYSQL TPCC initialize data dir {} without loading --------".format(address))
+    cmd = 'rm -rf /tmp/mysql_data\n'
+    cmd = cmd + 'mkdir -p /tmp/mysql_data\n'
+    run_shell_command(cmd)
+    write_bootstrap_sql(bootstrap_group, '/tmp/mysql_data/')
+
+    mysql_homedir = user_home(user)
+    rsync_to_remote(source_path='/tmp/mysql_data', username=user, host=address, target_path=mysql_homedir)
+
+    cmd = 'rm -rf /tmp/mysql_data\n'
+    run_shell_command(cmd)
+
+
+def mysql_init_data_dir(user, password, server_id, address, hosts, group_seeds, bootstrap_group=False, copy_data=False):
     print("-------- MYSQL TPCC initialize data dir {} --------".format(address))
     cmd = 'mkdir -p /tmp/mysql_data\n'
     run_shell_command(cmd)
 
-    local_mgr_address = '0.0.0.0:{}'.format(MYSQL_MGR_PORT)
+    local_mgr_address = '{}:{}'.format(address, MYSQL_MGR_PORT)
     mgr_address_list = str(group_seeds)
-    # mgr_address_list = mgr_address_list.replace(address, '0.0.0.0')
-    my_cnf_str = mysql_cnf(mysql_datadir, server_id, local_mgr_address, mgr_address_list)
+
+    my_cnf_str = mysql_cnf(mysql_datadir(user), server_id, address, local_mgr_address, mgr_address_list)
 
     my_cnf_tmp_path = os.path.join('/tmp/mysql_data', '.my.cnf')
     with open(my_cnf_tmp_path, 'w') as file:
         file.write(my_cnf_str)
 
-    bootstrap_group = server_id == 1
     sql = ''
     sql += mgr_privileges()
     sql_tmp_path = os.path.join('/tmp/mysql_data/mgr_privilege.sql')
     with open(sql_tmp_path, 'w') as file:
         file.write(sql)
 
-    with open('/tmp/mysql_data/bootstrap_single_leader_on.sql', 'w') as file:
-        sql = mgr_bootstrapping(bootstrap_group, True)
-        file.write(sql)
-    with open('/tmp/mysql_data/bootstrap.sql', 'w') as file:
-        sql = mgr_bootstrapping(bootstrap_group, False)
-        file.write(sql)
+    write_bootstrap_sql(bootstrap_group, '/tmp/mysql_data/')
+
     sql = ''
     for h in hosts:
         sql += mysql_user_privileges(mysql_root_user, mysql_root_password, h)
@@ -817,14 +1080,14 @@ def mysql_init_data_dir(user, password, server_id, address, hosts, group_seeds, 
         file.write(sql)
 
     if copy_data:
-        # cp = 'cp {}/mysql/{}.sql /tmp/mysql_data/'.format(BLOCK_PROJECT_PATH, mysql_db_name)
-        cp = 'cp {}/mysql/{}.sql {}'.format(BLOCK_PROJECT_PATH, mysql_db_name, mysql_datadir)
-        run_command_remote(user, password, address, cp)
+        cp = 'cp {}/mysql/{}.sql /tmp/mysql_data/'.format(BLOCK_PROJECT_PATH, mysql_db_name)
+        # cp = 'cp {}/mysql/{}.sql {}'.format(BLOCK_PROJECT_PATH, mysql_db_name, mysql_datadir(user))
+        run_shell_command(cp)
 
     cp = 'cp {}/mysql/tpcc_schema.sql /tmp/mysql_data/'.format(BLOCK_PROJECT_PATH)
     run_shell_command(cp)
-
-    rsync_to_remote(source_path=my_cnf_tmp_path, username=user, host=address, target_path='/home/mysql/.my.cnf')
+    mysql_homedir = user_home(user)
+    rsync_to_remote(source_path=my_cnf_tmp_path, username=user, host=address, target_path='{}/.my.cnf'.format(mysql_homedir))
     rsync_to_remote(source_path='/tmp/mysql_data', username=user, host=address, target_path=mysql_homedir)
 
     cmd = 'rm -rf /tmp/mysql_data\n'
@@ -834,9 +1097,9 @@ def mysql_init_data_dir(user, password, server_id, address, hosts, group_seeds, 
 def mysqld_startup(user, password, address):
     # mysqld startup
     cmd = '''\
-mysqld_safe --initialize-insecure --user=mysql
-cat /home/mysql/mysql_data/error.log
-'''.format(mysql_datadir)
+mysqld_safe --initialize-insecure --user={}
+cat {}/mysql_data/error.log
+'''.format(user, user_home(user), mysql_datadir(user))
     run_command_remote(username=user, password=password, host=address, shell_command=cmd)
 
     print("-------- MYSQL TPCC start mysqld {} --------".format(address))
@@ -848,12 +1111,12 @@ def mysql_create_schema(user, password, address):
     print("-------- MYSQL TPCC create table --------")
     cmd_create_table = 'mysql -u root --skip-password {} < {}/tpcc_schema.sql \n'.format(
         '',
-        mysql_datadir)
+        mysql_datadir(user))
 
     run_command_remote(user, password, address, shell_command=cmd_create_table)
 
 
-def mysql_load_run(address, warehouse):
+def mysql_load_run(user, address, warehouse):
     print("-------- MYSQL TPCC load data --------")
     cmd_load_script = '''\
 {}
@@ -870,17 +1133,17 @@ def mysql_gen_all_host_seeds(node_server, node_client):
     for n in node_server:
         if group_seeds != '':
             group_seeds += ','
-        group_seeds += '{}:{}'.format(n['address'], MYSQL_MGR_PORT)
-        hosts.append(n['address'])
-    hosts.append(node_client['address'])
+        group_seeds += '{}:{}'.format(n['private_address'], MYSQL_MGR_PORT)
+        hosts.append(n['private_address'])
+    hosts.append(node_client['private_address'])
     return hosts, group_seeds
 
 
-def mysql_init_bench_tpcc(conf_file, warehouse):
+def mysql_init_bench_tpcc(conf_file, load=False):
     path_node_configure_file = os.path.join(CONF_PATH, conf_file)
     conf_map = load_json_file(path_node_configure_file)
     node_server = conf_map['node_server_list'].copy()
-    node_client = conf_map['node_client'].copy()
+    node_client = conf_map['node_client_list'].copy()[0]
     user, password = get_user_password()
     # user = 'mysql'
     # password = 'mysql'
@@ -889,37 +1152,40 @@ def mysql_init_bench_tpcc(conf_file, warehouse):
     hosts, group_seeds = mysql_gen_all_host_seeds(node_server, node_client)
 
     server_id = 0
-    for n in node_server:
+    for i in reversed(range(len(node_server))):
+        n = node_server[i]
         server_id = server_id + 1
-        address = n['address']
+        address = n['private_address']
 
-        mysql_clean(user, password, address)
-        bootstrap_group = server_id == 1
+        bootstrap_group = i + 1 == len(node_server)
         if bootstrap_group:
             master_server_address = address
-
-        mysql_init_data_dir(user, password, server_id, address, hosts, group_seeds, True)
-
+        if load:
+            mysql_clean(user, password, address)
+            mysql_init_data_dir(user, password, server_id, address, hosts, group_seeds, bootstrap_group, True)
+        else:
+            mysql_init_data_dir_without_loading(user, address, bootstrap_group)
         mysqld_startup(user, password, address)
 
     time.sleep(3)
 
     for n in node_server:
-        address = n['address']
+        address = n['private_address']
+        if load:
+            mysql_create_schema(user, password, address)
 
-        mysql_create_schema(user, password, address)
-
-        cmd = 'mysql -u root --skip-password {} < {}/{}.sql'.format(mysql_db_name, mysql_datadir, mysql_db_name)
-        ec, _, _ = run_command_remote(username=user, password=password, host=address, shell_command=cmd)
-        if ec != 0:
-            time.sleep(1)
-            exit(0)
+            cmd = 'mysql -u root --skip-password {} < {}/{}.sql'.format(mysql_db_name, mysql_datadir(user), mysql_db_name)
+            ec, _, _ = run_command_remote(username=user, password=password, host=address, shell_command=cmd)
+            if ec != 0:
+                time.sleep(1)
+                exit(0)
 
     print("-------- MYSQL TPCC load data finish --------")
 
     for n in node_server:
-        address = n['address']
+        address = n['private_address']
         print("-------- MYSQL TPCC run initialize script on address {}--------".format(address))
+        remote_mgr_sql = '{}/mgr_privilege.sql'.format(mysql_datadir(user))
         cmd = 'mysql -u root --skip-password -f < {} \n'.format(remote_mgr_sql)
         while True:
             ec, std, err = run_command_remote(username=user, password=password, host=address, shell_command=cmd)
@@ -934,11 +1200,11 @@ def mysql_init_bench_tpcc(conf_file, warehouse):
 
     mysql_run_sql_local(username=user, password=password, host=master_server_address, sql=sql_select_group_member)
 
-    for n in node_server:
-        address = n['address']
+    for n in reversed(node_server):
+        address = n['private_address']
         print("-------- MYSQL TPCC mgr bootstrap on address {}--------".format(address))
         while True:
-            cmd = 'mysql -u root --skip-password -f < {} \n'.format(remote_bootstrap_sql)
+            cmd = 'mysql -u root --skip-password -f < {} \n'.format(remote_bootstrap_sql(user))
             print(cmd)
             ec, std, err = run_command_remote(username=user, password=password, host=address, shell_command=cmd)
             if ec == 0:
@@ -953,7 +1219,7 @@ def mysql_init_bench_tpcc(conf_file, warehouse):
 
     print("-------- MYSQL TPCC create user privileges --------")
     while True:
-        cmd = 'mysql -u root --skip-password -f < {} \n'.format(remote_grant_sql)
+        cmd = 'mysql -u root --skip-password -f < {} \n'.format(remote_grant_sql(user))
         print(cmd)
         ec, std, err = run_command_remote(username=user, password=password, host=master_server_address,
                                           shell_command=cmd)
@@ -968,72 +1234,145 @@ def mysql_init_bench_tpcc(conf_file, warehouse):
     mysql_run_sql_local(username=user, password=password, host=master_server_address, sql=sql_select_group_member)
 
 
-if __name__ == '__main__':
+def handle_debug(conf, url):
+    path_node_configure_file = os.path.join(CONF_PATH, conf)
+    conf_map = load_json_file(path_node_configure_file)
+    node_server = conf_map['node_server_list'].copy()
+    node_client = conf_map['node_client_list'].copy()
+
+    for node in [node_client]:
+        address = node['private_address']
+        port = node['port'] + 1000
+        wget = 'wget -q --output-document - {}:{}/{}'.format(address, port, url)
+        run_shell_command(wget)
+
+
+def main():
     parser = argparse.ArgumentParser(description='benchmark')
-    parser.add_argument('-l', '--configure-latency-wan', type=int, help='configure wan latency(ms)')
-    parser.add_argument('-ll', '--configure-latency-lan', type=int, help='configure wan latency(ms)')
+    parser.add_argument('-lw', '--configure-latency-wan', type=int, help='configure wan latency(ms)')
+    parser.add_argument('-ll', '--configure-latency-lan', type=int, help='configure lan latency(ms)')
+    parser.add_argument('-bw', '--configure-bandwidth-wan', type=int, help='configure wan bandwidth(Mbps)')
     parser.add_argument('-mg', '--mysql-data-gen', action='store_true', help='test data generate')
     parser.add_argument('-ml', '--mysql-load', action='store_true', help='test mysql load')
+    parser.add_argument('-mi', '--mysql-init', action='store_true', help='test mysql load')
     parser.add_argument('-mr', '--mysql-run', action='store_true', help='test mysql run')
-    parser.add_argument('-t', '--test-type', type=str, help='test type:bind/unbind/dist/contention')
+    parser.add_argument('-t', '--db-config-type', type=str, help='db config type:lb/tb/sn/scr')
     parser.add_argument('-r', '--run-command', type=str, help='run command on all site')
     parser.add_argument('-c', '--clean', action='store_true', help='clean all')
+    parser.add_argument('-tp', '--test-parameter', type=str, help='test parameter:cache/readonly/terminal/distribute')
+    parser.add_argument('-dt', '--distributed-tx', action='store_true', help='control remote distributed transaction')
+    parser.add_argument('-dg', '--debug-url', type=str, help='debug url')
 
     args = parser.parse_args()
 
-    latency_ms = getattr(args, 'configure_latency_wan')
-    latency_ms_lan = getattr(args, 'configure_latency_lan')
-    test_type = getattr(args, 'test_type')
-    command = getattr(args, 'run_command')
-    binding = False
-    dist = False
     if args.mysql_data_gen:
         mysql_dump_data(NODE_MYSQL_CONF, NUM_WAREHOUSE)
-        exit(0)
-    if args.mysql_load:
-        mysql_load_data(NODE_MYSQL_CONF, NUM_WAREHOUSE)
-        exit(0)
-    if args.mysql_run:
-        if latency_ms is not None:
-            config_latency(NODE_MYSQL_CONF, latency_ms)
+        return
+    elif args.mysql_load:
+        mysql_load_data(NODE_MYSQL_CONF, load=True)
+        return
+    elif args.mysql_init:
+        mysql_load_data(NODE_MYSQL_CONF, load=False)
+        return
+    elif args.mysql_run:
         mysql_run_evaluation(NODE_MYSQL_CONF, NUM_WAREHOUSE)
-        exit(0)
-    if test_type is not None:
-        if test_type == 'bind':
-            binding = True
-            dist = False
-        elif test_type == 'unbind':
-            binding = False
-            dist = False
-        elif test_type == 'dist':
-            binding = True
-            dist = True
-        elif test_type == 'contention':
-            binding = True
-            dist = True
-    conf = config_file_name(dist, binding)
+        return
+
+    control_dist_tx = args.distributed_tx
+    latency_ms_wan = getattr(args, 'configure_latency_wan')
+    latency_ms_lan = getattr(args, 'configure_latency_lan')
+    bandwidth_wan = getattr(args, 'configure_bandwidth_wan')
+    db_config_type = getattr(args, 'db_config_type')
+    test_parameter = getattr(args, 'test_parameter')
+    command = getattr(args, 'run_command')
+    debug_url = getattr(args, 'debug_url')
+
+    if latency_ms_lan is None:
+        latency_ms_lan = 0
+    if latency_ms_wan is None:
+        latency_ms_wan = 0
+    if test_parameter is None:
+        test_parameter = TEST_TERMINAL
+
+    conf = config_file_name(db_config_type)
     if args.clean:
         clean_all(conf, clean_run_dir=True)
-        exit(0)
-    if command is not None:
+        return
+    elif command is not None:
         execute_command(conf, command)
-        exit(0)
+        return
+    elif latency_ms_wan > 0:
+        config_latency(conf, latency_ms_wan, latency_ms_lan, bandwidth_wan, True)
+        return
 
-    if latency_ms is not None:
-        config_latency(conf, latency_ms)
-        exit(0)
-    if latency_ms_lan is not None:
-        config_latency(conf, latency_ms_lan, wan=False)
-        exit(0)
+    if debug_url is not None:
+        if db_config_type is None:
+            return
+        handle_debug(conf, debug_url)
+        return
 
-    if test_type is not None:
-        if test_type == 'bind':
-            evaluation_block_binding(conf, True)
-        elif test_type == 'unbind':
-            evaluation_block_binding(conf, False)
-        elif test_type == 'dist':
-            evaluation_distributed(conf)
-        elif test_type == 'contention':
-            evaluation_contention(conf)
-        elif test_type == 'warehouse':
-            evaluation_warehouse(conf)
+    if db_config_type == DB_CONFIG_STB:
+        if test_parameter == TEST_CACHE:
+            evaluation_block_binding(
+                conf,
+                tight_binding=True,
+                cached_percentage_array=CCB_CACHED_PERCENTAGE_ARRAY)
+        elif test_parameter == TEST_TERMINAL:
+            evaluation_block_binding(
+                conf,
+                tight_binding=True,
+                num_terminal_array=NUM_TERMINAL_ARRAY)
+        elif test_parameter == TEST_READ_ONLY:
+            evaluation_block_binding(
+                conf,
+                tight_binding=True,
+                percent_read_only=PERCENT_READ_ONLY
+            )
+        elif test_parameter == TEST_DISTRIBUTE:
+            evaluation_distributed(
+                conf,
+                db_types=[DB_S],
+                array_percent_remote_wh=PERCENT_REMOTE_WH_ARRAY,
+                control_percent_dist_tx=control_dist_tx)
+    elif db_config_type == DB_CONFIG_SLB:
+        if test_parameter == TEST_CACHE:
+            evaluation_block_binding(
+                conf,
+                tight_binding=False,
+                cached_percentage_array=CCB_CACHED_PERCENTAGE_ARRAY)
+        elif test_parameter == TEST_TERMINAL:
+            evaluation_block_binding(
+                conf,
+                tight_binding=False,
+                num_terminal_array=NUM_TERMINAL_ARRAY)
+    elif db_config_type == DB_CONFIG_SN:
+        if test_parameter == TEST_DISTRIBUTE:
+            evaluation_distributed(
+                conf,
+                db_types=DB_TYPE_DISTRIBUTED,
+                array_percent_remote_wh=PERCENT_REMOTE_WH_ARRAY,
+                control_percent_dist_tx=control_dist_tx)
+        elif test_parameter == TEST_TERMINAL:
+            evaluation_distributed(conf,
+                                   array_num_terminal=NUM_TERMINAL_ARRAY)
+        elif test_parameter == TEST_READ_ONLY:
+            evaluation_ratio_read_only_tx(
+                conf,
+                db_types=DB_TYPE_SN_LOCKING,
+                control_percent_dist_tx=control_dist_tx)
+    elif db_config_type == DB_CONFIG_SCR:
+        if test_parameter == TEST_DISTRIBUTE:
+            evaluation_distributed(
+                conf,
+                db_types=DB_TYPE_SCR,
+                array_percent_remote_wh=PERCENT_REMOTE_WH_ARRAY,
+                control_percent_dist_tx=control_dist_tx)
+        elif test_parameter == TEST_READ_ONLY:
+            evaluation_ratio_read_only_tx(
+                conf,
+                db_types=DB_TYPE_SCR,
+                control_percent_dist_tx=control_dist_tx)
+
+
+if __name__ == '__main__':
+    main()

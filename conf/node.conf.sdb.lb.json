@@ -1,0 +1,126 @@
+{
+    "node_server_list": [
+        {
+            "zone_name": "az1",
+            "shard_name": ["s1"],
+            "node_name": "node_s1_raz1_bCCB",
+            "address": "47.92.111.200",
+            "private_address": "172.26.215.140",
+            "port": 700,
+            "repl_port": 800,
+            "block_type": [
+                "CCB"
+            ]
+        },
+        {
+            "zone_name": "az1",
+            "shard_name": ["s1"],
+            "node_name": "node_s1_raz1_bRLB",
+            "address": "47.92.39.3",
+            "private_address": "172.26.215.139",
+            "port": 800,
+            "repl_port": 900,
+            "block_type": [
+                "RLB"
+            ]
+        },
+        {
+            "zone_name": "az1",
+            "shard_name": ["s1"],
+            "node_name": "node_s1_raz1_bDSB",
+            "address": "47.92.247.50",
+            "private_address": "172.26.215.138",
+            "port": 900,
+            "repl_port": 1000,
+            "block_type": [
+                "DSB"
+            ]
+        },
+        {
+            "zone_name": "az2",
+            "shard_name": ["s1"],
+            "node_name": "node_s1_raz2_bCCB",
+            "address": "47.109.89.36",
+            "private_address": "172.24.34.242",
+            "port": 700,
+            "repl_port": 800,
+            "block_type": [
+                "CCB"
+            ]
+        },
+        {
+            "zone_name": "az2",
+            "shard_name": ["s1"],
+            "node_name": "node_s1_raz2_bRLB",
+            "address": "47.109.51.70",
+            "private_address": "172.24.34.241",
+            "port": 800,
+            "repl_port": 900,
+            "block_type": [
+                "RLB"
+            ]
+        },
+        {
+            "zone_name": "az2",
+            "shard_name": ["s1"],
+            "node_name": "node_s1_raz2_bDSB",
+            "address": "47.109.46.12",
+            "private_address": "172.24.34.240",
+            "port": 900,
+            "repl_port": 1000,
+            "block_type": [
+                "DSB"
+            ]
+        },
+        {
+            "zone_name": "az3",
+            "shard_name": ["s1"],
+            "node_name": "node_s1_raz3_bCCB",
+            "address": "121.41.120.69",
+            "private_address": "172.16.190.188",
+            "port": 700,
+            "repl_port": 800,
+            "block_type": [
+                "CCB"
+            ]
+        },
+        {
+            "zone_name": "az3",
+            "shard_name": ["s1"],
+            "node_name": "node_s1_raz3_bRLB",
+            "address": "120.27.199.124",
+            "private_address": "172.16.190.185",
+            "port": 800,
+            "repl_port": 900,
+            "block_type": [
+                "RLB"
+            ]
+        },
+        {
+            "zone_name": "az3",
+            "shard_name": ["s1"],
+            "node_name": "node_s1_raz3_bDSB",
+            "address": "121.43.57.111",
+            "private_address": "172.16.190.186",
+            "port": 900,
+            "repl_port": 1000,
+            "block_type": [
+                "DSB"
+            ]
+        }
+    ],
+    "node_client_list": [
+        {
+            "zone_name": "az3",
+            "shard_name": ["s_1"],
+            "node_name": "client_1",
+            "address": "121.43.114.145",
+            "private_address": "172.16.190.187",
+            "port": 700,
+            "repl_port": 800,
+            "block_type": [
+                "CLIENT"
+            ]
+        }
+    ]
+}

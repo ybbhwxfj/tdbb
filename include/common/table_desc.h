@@ -1,17 +1,18 @@
 #pragma once
 
-#include <vector>
-#include <string>
-#include "common/table_id.h"
 #include "common/column_desc.h"
+#include "common/table_id.h"
 #include <boost/json.hpp>
+#include <string>
+#include <vector>
 
 class table_desc {
- private:
+private:
   std::string table_name_;
   std::vector<column_desc> column_desc_;
   table_id_t table_id_;
- public:
+
+public:
   table_desc() : table_id_(0) {}
 
   void from_json(boost::json::object &obj);
@@ -22,5 +23,7 @@ class table_desc {
 
   const std::string &table_name() const { return table_name_; }
 
-  const std::vector<column_desc> &column_desc_list() const { return column_desc_; }
+  const std::vector<column_desc> &column_desc_list() const {
+    return column_desc_;
+  }
 };

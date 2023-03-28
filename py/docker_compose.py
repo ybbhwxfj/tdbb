@@ -124,18 +124,14 @@ def generate_docker_compose(num_shard, num_az, binding=True):
     compose_yaml['services'][name] = service
     nodes_conf['node_client'] = (node_conf)
 
-    name, service, node_conf = gen_service(shard=0, az=num_az, block_type='pnb')
-    compose_yaml['services'][name] = service
-    nodes_conf['node_panel'] = (node_conf)
-
     if num_shard > 1:
         db_type = 'dist'
     else:
         db_type = 'share'
     if binding:
-        b_type = 'bind'
+        b_type = 'tb'
     else:
-        b_type = 'unbind'
+        b_type = 'lb'
     with open(r'docker-compose.{}.{}.yml'.format(db_type, b_type), 'w') as file:
         documents = yaml.dump(compose_yaml, file)
         file.close()

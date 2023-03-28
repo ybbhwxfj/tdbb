@@ -6,7 +6,6 @@ import re
 DB_TYPE_SHARED = 'db-s'
 DB_TYPE_SHARED_NOTHING = 'db-sn'
 DB_TYPE_DETERMINISTIC = 'db-d'
-DB_TYPE_GEO_REPL_OPTIMIZED = "db-gro"
 DB_TYPE_TK = "db-tk"
 OTHER = 'OTHER'
 CCB = 'CCB'
@@ -53,13 +52,34 @@ DBTypeMacro = {
     DEF_DB_TYPE_NON_DETERMINISTIC,
 }
 
+DB_TYPES = [
+    DB_TYPE_SHARED,
+    DB_TYPE_SHARED_NOTHING,
+    DB_TYPE_DETERMINISTIC,
+    DB_TYPE_DETERMINISTIC,
+    DB_TYPE_TK
+]
+
 Type2Macro = {
-    DB_TYPE_SHARED: {DEF_DB_TYPE_SHARED, DEF_DB_TYPE_NON_DETERMINISTIC, DEF_DB_TYPE_ROCKS},
-    DB_TYPE_SHARED_NOTHING: {DEF_DB_TYPE_SHARE_NOTHING, DEF_DB_TYPE_NON_DETERMINISTIC, DEF_DB_TYPE_ROCKS},
-    DB_TYPE_DETERMINISTIC: {DEF_DB_TYPE_CALVIN, DEF_DB_TYPE_ROCKS},
-    DB_TYPE_GEO_REPL_OPTIMIZED: {DEF_DB_TYPE_SHARE_NOTHING, DEF_DB_TYPE_NON_DETERMINISTIC, DEF_DB_TYPE_GEO_REP_OPTIMIZE,
-                                 DEF_DB_TYPE_ROCKS},
-    DB_TYPE_TK: {DEF_DB_TYPE_SHARE_NOTHING, DEF_DB_TYPE_NON_DETERMINISTIC, DEF_DB_TYPE_TK},
+    DB_TYPE_SHARED: {
+        DEF_DB_TYPE_SHARED,
+        DEF_DB_TYPE_NON_DETERMINISTIC,
+        DEF_DB_TYPE_ROCKS
+    },
+    DB_TYPE_SHARED_NOTHING: {
+        DEF_DB_TYPE_SHARE_NOTHING,
+        DEF_DB_TYPE_NON_DETERMINISTIC,
+        DEF_DB_TYPE_ROCKS
+    },
+    DB_TYPE_DETERMINISTIC: {
+        DEF_DB_TYPE_CALVIN,
+        DEF_DB_TYPE_ROCKS
+    },
+    DB_TYPE_TK: {
+        DEF_DB_TYPE_SHARE_NOTHING,
+        DEF_DB_TYPE_NON_DETERMINISTIC,
+        DEF_DB_TYPE_TK
+    },
 }
 
 DEF_DB_SHARED = 'DB_SHARED'
@@ -157,9 +177,6 @@ def diff_block_loc(path, dbt2path, db_t1, db_t2):
         print('')
 
 
-DB_TYPES = [DB_TYPE_SHARED, DB_TYPE_SHARED_NOTHING, DB_TYPE_DETERMINISTIC, DB_TYPE_DETERMINISTIC,
-            DB_TYPE_GEO_REPL_OPTIMIZED, DB_TYPE_TK]
-
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='mloc')
     project_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -172,7 +189,5 @@ if __name__ == '__main__':
     diff_block_loc(project_path, dbt2path, DB_TYPE_SHARED, DB_TYPE_SHARED_NOTHING)
     print("from shared-nothing to deterministic DB ...")
     diff_block_loc(project_path, dbt2path, DB_TYPE_SHARED_NOTHING, DB_TYPE_DETERMINISTIC)
-    print("from shared-nothing to geo-optimized DB ...")
-    diff_block_loc(project_path, dbt2path, DB_TYPE_SHARED_NOTHING, DB_TYPE_GEO_REPL_OPTIMIZED)
     print("from shared-nothing to TK DB ...")
     diff_block_loc(project_path, dbt2path, DB_TYPE_SHARED_NOTHING, DB_TYPE_TK)

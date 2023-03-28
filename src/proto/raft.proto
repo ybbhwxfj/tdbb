@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-import "log_entry.proto";
+import "raft_log_entry.proto";
 
 message transfer_leader {
   uint32 source = 1;
@@ -10,6 +10,19 @@ message transfer_leader {
 
 message transfer_notify {
   uint32 leader_transferee = 1;
+}
+
+message pre_vote_request {
+  uint32 source = 1;
+  uint32 dest = 2;
+}
+
+message pre_vote_response {
+  uint32 source = 1;
+  uint32 dest = 2;
+  uint32 term = 3;
+  uint32 state = 4;
+  bool granted = 5;
 }
 
 message request_vote_request {
@@ -35,9 +48,10 @@ message append_entries_request {
   uint64 prev_log_term = 5;
   uint64 commit_index = 6;
   uint64 consistency_index = 7;
-  uint64 tick_sequence = 8;
+  uint64 ts_append_send = 8;
   bool heart_beat = 9;
-  repeated log_entry entries = 10;
+  uint64 tick_ms = 10;
+  repeated raft_log_entry entries = 11;
 }
 
 message append_entries_response {
@@ -47,6 +61,9 @@ message append_entries_response {
   bool success = 4;
   uint64 match_index = 5;
   uint32 lead = 6;
-  uint64 tick_sequence = 7;
+  uint64 last_log_index = 7;
   bool heart_beat = 8;
+  // for debug only
+  uint64 ts_append_send = 9;
+  bool write_log = 10;
 }

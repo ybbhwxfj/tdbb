@@ -1,13 +1,15 @@
 #include "raft_test_log_gen.h"
-#include "proto/proto.h"
 #include "common/json_pretty.h"
+#include "common/tx_log.h"
+#include "proto/proto.h"
+#include "raft_test_context.h"
 #include <boost/filesystem.hpp>
 #include <fstream>
 
 void raft_test_log_gen() {
   raft_test_log l;
   uint64_t term = 12;
-  log_state *s = l.mutable_state();
+  raft_log_state *s = l.mutable_state();
   s->set_consistency_index(0);
   s->set_term(term);
   s->set_vote(0);
@@ -20,10 +22,10 @@ void raft_test_log_gen() {
     e->set_index(index);
     e->set_term(term);
     for (uint64_t j = 0; j < num_tx; j++) {
-      auto x = e->add_xlog();
-      x->set_log_type(tx_cmd_type::TX_CMD_RM_COMMIT);
-      x->set_xid(1000 * (i + 1) + (j + 1));
-      x->set_index(index);
+
+      if (i + 1 == num_e && j + 1 == num_tx) {
+        *e->mutable_repeated_tx_logs() = FINISH_FLAG;
+      }
     }
   }
 

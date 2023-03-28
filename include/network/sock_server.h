@@ -1,12 +1,13 @@
+#include "common/config.h"
+#include "common/define.h"
+#include "common/message.h"
+#include "common/result.hpp"
 #include "network/client.h"
 #include "network/connection.h"
-#include "common/define.h"
-#include "common/result.hpp"
 #include "network/future.hpp"
-#include "common/message.h"
 #include "network/message_handler.h"
 #include "network/net_service.h"
-#include "common/config.h"
+#include <atomic>
 #include <boost/asio.hpp>
 #include <boost/thread/thread.hpp>
 #include <condition_variable>
@@ -16,14 +17,13 @@
 #include <memory>
 #include <thread>
 #include <valarray>
-#include <atomic>
 
 using boost::asio::ip::tcp;
 using boost::system::error_code;
 //----------------------------------------------------------------------
 
 class sock_server {
- public:
+public:
   sock_server(const config &conf, ptr<net_service> service);
 
   ~sock_server();
@@ -34,19 +34,11 @@ class sock_server {
 
   void join();
 
- private:
+private:
+  void async_accept_connection(ptr<tcp::acceptor> acceptor, service_type st);
 
-  void async_accept_connection();
-
-  uint16_t port_;
-
-  // take care of the order ...
-  // endpoint_ , io_service_ must be initialized before acceptor_
-  // io_service_ must be initialized before socket_
-  tcp::endpoint endpoint_;
-
-  std::unique_ptr<tcp::acceptor> acceptor_;
-  std::unique_ptr<tcp::socket> socket_;
+  ptr<tcp::acceptor> acceptor_;
+  ptr<tcp::acceptor> repl_acceptor_;
   ptr<net_service> service_;
   std::mutex client_conn_mutex_;
   // client to server connections ...

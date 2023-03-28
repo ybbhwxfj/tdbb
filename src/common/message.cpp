@@ -1,6 +1,7 @@
 #include "common/message.h"
 
-template<> enum_strings<message_type>::e2s_t enum_strings<message_type>::enum2str = {
+template<>
+enum_strings<message_type>::e2s_t enum_strings<message_type>::enum2str = {
     {REQUEST_MIN, "REQUEST_MIN"},
 
     {REQUEST_HELLO, "REQUEST_HELLO"},
@@ -37,11 +38,16 @@ template<> enum_strings<message_type>::e2s_t enum_strings<message_type>::enum2st
     {CCB_BORADCAST_STATUS_REQ, "CCB_BORADCAST_STATUS_REQ"},
     {CCB_BORADCAST_STATUS_RESP, "CCB_BORADCAST_STATUS_RESP"},
     {CLIENT_TX_REQ, "CLIENT_TX_REQ"},
+    {CLIENT_CCB_STATE_REQ, "CLIENT_CCB_STATE_REQ"},
+    {CLIENT_CCB_STATE_RESP, "CLIENT_CCB_STATE_RESP"},
+    {CCB_HANDLE_WARM_UP_REQ, "DSB_HANDLE_WARM_UP_REQ"},
+    {CCB_HANDLE_WARM_UP_RESP, "CCB_HANDLE_WARM_UP_RESP"},
     {TX_TM_COMMIT, "TX_TM_COMMIT"},
     {TX_TM_ABORT, "TX_TM_ABORT"},
     {TX_TM_END, "TX_TM_END"},
     {TX_RM_PREPARE, "TX_RM_PREPARE"},
     {TX_RM_ACK, "TX_RM_ACK"},
+    {TX_VICTIM, "TX_VICTIM"},
     {TX_TM_REQUEST, "TX_TM_REQUEST"},
     {LEAD_STATUS_REQUEST, "LEAD_STATUS_REQUEST"},
     {LEAD_STATUS_RESPONSE, "LEAD_STATUS_RESPONSE"},
@@ -53,7 +59,7 @@ template<> enum_strings<message_type>::e2s_t enum_strings<message_type>::enum2st
     {RM_ENABLE_VIOLATE, "RM_ENABLE_VIOLATE"},
     {TM_ENABLE_VIOLATE, "TM_ENABLE_VIOLATE"},
     {DL_DEPENDENCY, "DL_DEPENDENCY"},
-    {PANEL_INFO_RESP_TO_CCB, "PANEL_INFO_RESP_TO_CCB"},
+
     {CCB_MESSAGE_END, "CCB_MESSAGE_END"},
 
     // the following message are processed by DSB
@@ -61,17 +67,17 @@ template<> enum_strings<message_type>::e2s_t enum_strings<message_type>::enum2st
     {C2D_READ_DATA_REQ, "C2D_READ_DATA_REQ"},
 
     {R2D_REGISTER_RESP, "R2D_REGISTER_RESP"},
+    {R2D_REPLAY_TO_DSB_REQ, "R2D_REPLAY_TO_DSB_REQ"},
     {CLIENT_LOAD_DATA_REQ, "CLIENT_LOAD_DATA_REQ"},
+    {DSB_HANDLE_WARM_UP_REQ, "DSB_HANDLE_WARM_UP_REQ"},
     {DSB_MESSAGE_END, "DSB_MESSAGE_END"},
-
-    {PANEL_MESSAGE_BEGIN, "PANEL_MESSAGE_BEGIN"},
-    {PANEL_REPORT, "PANEL_REPORT"},
-    {PANEL_INFO_REQ, "PANEL_INFO_REQ"},
-    {PANEL_MESSAGE_END, "PANEL_MESSAGE_END"},
 
     {CLI_MESSAGE_BEGIN, "CLI_MESSAGE_BEGIN"},
     {CLIENT_TX_RESP, "CLIENT_TX_RESP"},
+    {CLIENT_HANDLE_WARM_UP_RESP, "CLIENT_HANDLE_WARM_UP_RESP"},
     {CLIENT_LOAD_DATA_RESP, "CLIENT_LOAD_DATA_RESP"},
-    {PANEL_INFO_RESP_TO_CLIENT, "  PANEL_INFO_RESP_TO_CLIENT,"},
+    {CLIENT_SYNC, "CLIENT_SYNC"},
+    {CLIENT_BENCH_STOP, "CLIENT_BENCH_STOP"},
+    {CLIENT_SYNC_CLOSE, "CLIENT_SYNC_CLOSE"},
     {CLI_MESSAGE_END, "CLI_MESSAGE_END"},
 };

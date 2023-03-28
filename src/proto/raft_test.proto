@@ -1,9 +1,8 @@
 syntax = "proto3";
-import "tx_log.proto";
-import "log_entry.proto";
+
+import "raft_log_entry.proto";
 
 message raft_test_log {
-  log_state state = 1;
-  repeated log_entry entries = 2;
-  repeated tx_log commit_logs = 3;
+  raft_log_state state = 1;
+  repeated raft_log_entry entries = 2;
 }

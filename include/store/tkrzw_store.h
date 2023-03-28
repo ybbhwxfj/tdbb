@@ -10,23 +10,21 @@
 #include <boost/asio.hpp>
 
 class tkrzw_store : public store {
- private:
+private:
   config conf_;
   std::string path_;
   node_id_t node_id_;
   std::string node_name_;
   tkrzw::HashDBM *dbm_[MAX_TABLES];
- public:
+
+public:
   tkrzw_store(const config &conf);
 
   ~tkrzw_store();
 
-  virtual result<void> replay(const replay_to_dsb_request msg);
+  virtual result<void> replay(ptr<std::vector<ptr<tx_operation>>> ops);
 
-  result<void> put(
-      table_id_t table_id,
-      tuple_id_t tuple_id,
-      tuple_pb &&tuple);
+  result<void> put(table_id_t table_id, tuple_id_t tuple_id, tuple_pb &&tuple);
 
   result<ptr<tuple_pb>> get(table_id_t table_id, tuple_id_t tuple_id);
 

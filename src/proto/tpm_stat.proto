@@ -1,0 +1,16 @@
+syntax = "proto3";
+message tpm_stat {
+  uint64 duration = 1;
+  uint64 commit_duration = 2;
+  uint64 duration_append_log = 3;
+  uint64 duration_replicate_log = 4;
+  uint64 duration_read = 5;
+  uint64 duration_read_dsb = 6;
+  uint64 duration_lock_wait = 7;
+  uint64 duration_part = 8;
+  uint64 num_tx = 9;
+  uint64 num_commit = 10;
+  uint64 num_abort = 11;
+  uint64 num_part = 12;
+  uint64 num_lock = 13;
+}

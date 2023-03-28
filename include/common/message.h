@@ -1,7 +1,7 @@
 #pragma once
 
-#include "common/result.hpp"
 #include "common/enum_str.h"
+#include "common/result.hpp"
 
 enum message_block {
   MESSAGE_BLOCK_INVALID = 0,
@@ -28,7 +28,8 @@ enum message_type {
   RAFT_APPEND_ENTRIES_RESP,
   RAFT_REQ_VOTE_REQ,
   RAFT_REQ_VOTE_RESP,
-
+  RAFT_PRE_VOTE_REQ,
+  RAFT_PRE_VOTE_RESP,
   RAFT_TRANSFER_LEADER,
   RAFT_TRANSFER_NOTIFY,
 
@@ -51,11 +52,15 @@ enum message_type {
   CCB_BORADCAST_STATUS_REQ,
   CCB_BORADCAST_STATUS_RESP,
   CLIENT_TX_REQ,
+  CLIENT_CCB_STATE_REQ,
+  CCB_HANDLE_WARM_UP_REQ,
+  CCB_HANDLE_WARM_UP_RESP,
   TX_TM_COMMIT,
   TX_TM_ABORT,
   TX_TM_END,
   TX_RM_PREPARE,
   TX_RM_ACK,
+  TX_VICTIM,
   TX_TM_REQUEST,
   LEAD_STATUS_REQUEST,
   LEAD_STATUS_RESPONSE,
@@ -69,30 +74,31 @@ enum message_type {
 
   DL_DEPENDENCY,
 
-  PANEL_INFO_RESP_TO_CCB,
-
+  CCB_ERROR_CONSISTENCY,
   CCB_MESSAGE_END,
 
   // the following message are processed by DSB
   DSB_MESSAGE_BEGIN,
   C2D_READ_DATA_REQ,
   R2D_REGISTER_RESP,
+  R2D_REPLAY_TO_DSB_REQ,
   CLIENT_LOAD_DATA_REQ,
+  DSB_HANDLE_WARM_UP_REQ,
+  DSB_ERROR_CONSISTENCY, _ERROR_CONSISTENCY,
   DSB_MESSAGE_END,
-
-  PANEL_MESSAGE_BEGIN,
-  PANEL_REPORT,
-  PANEL_INFO_REQ,
-  PANEL_MESSAGE_END,
 
   CLI_MESSAGE_BEGIN,
   CLIENT_TX_RESP,
+  CLIENT_CCB_STATE_RESP,
+  CLIENT_HANDLE_WARM_UP_RESP,
   CLIENT_LOAD_DATA_RESP,
-  PANEL_INFO_RESP_TO_CLIENT,
+  CLIENT_SYNC,
+  CLIENT_BENCH_STOP,
+  CLIENT_SYNC_CLOSE,
   CLI_MESSAGE_END,
 
   MESSAGE_END,
 };
 
-template<> enum_strings<message_type>::e2s_t enum_strings<message_type>::enum2str;
-
+template<>
+enum_strings<message_type>::e2s_t enum_strings<message_type>::enum2str;

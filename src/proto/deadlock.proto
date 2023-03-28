@@ -1,8 +1,8 @@
 syntax = "proto3";
 
 message dependency {
-  uint64 in = 1;
-  repeated uint64 out = 2;
+  uint64 out = 1;
+  repeated uint64 in = 2;
 };
 
 message dependency_set {

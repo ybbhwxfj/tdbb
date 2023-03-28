@@ -1,8 +1,8 @@
 #pragma once
 
+#include "common/marshalable.h"
 #include "common/ptr.hpp"
 #include "common/tuple.h"
-#include "common/marshalable.h"
 #include <boost/endian.hpp>
 
 enum tx_op_type {
@@ -15,10 +15,10 @@ enum tx_op_type {
 };
 
 class tx_operation : public marshalable {
- private:
+private:
   tx_op_type type_;
 
- public:
+public:
   tx_operation(tx_op_type type) : type_(type) {}
 
   virtual ~tx_operation() {}
@@ -48,20 +48,19 @@ class tx_operation : public marshalable {
 };
 
 class tx_read_key : public tx_operation {
- private:
+private:
   item key_;
 
- private:
+private:
   tx_read_key(item &key)
       : key_(key), tx_operation(tx_op_type::TX_OP_READ_KEY) {}
 };
 
 class tx_write_key : public tx_operation {
- private:
+private:
   item key_;
   tuple_pb tuple_;
 
- public:
-  tx_write_key(item &key, tx_op_type type)
-      : key_(key), tx_operation(type) {}
+public:
+  tx_write_key(item &key, tx_op_type type) : key_(key), tx_operation(type) {}
 };

@@ -90,4 +90,7 @@ if (THREAD_SANITIZER GREATER 0)
 endif ()
 
 add_subdirectory(src)
-add_subdirectory(test)
+if (NOT DEFINED DISABLE_TEST)
+    add_subdirectory(test)
+endif ()
+

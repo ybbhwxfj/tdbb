@@ -23,8 +23,11 @@ enum tx_cmd_type {
 message tx_log {
   tx_cmd_type log_type = 1;
   uint64 xid = 2;
-  uint64 index = 3;
-  uint64 term = 4;
-  uint64 repl_latency = 5;
-  repeated tx_operation operations = 6;
+  repeated tx_operation operations = 3;
+}
+
+message tx_log_payload {
+  uint64 ts = 1;
+  // binary representation of tx_log
+  bytes tx_log = 2;
 }

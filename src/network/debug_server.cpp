@@ -1,6 +1,6 @@
 #include "network/debug_server.h"
+#include "common/logger.hpp"
 #include <memory>
-#include <boost/log/trivial.hpp>
 #include <sstream>
 //------------------------------------------------------------------------------
 
@@ -137,7 +137,6 @@ void handle_request(const http_handler &handler,
   // Build the path to the requested file
   std::string path = std::string(req.target());
 
-
   // Attempt to open the file
   beast::error_code ec;
   std::string body;
@@ -156,7 +155,7 @@ void handle_request(const http_handler &handler,
   std::stringstream ssm;
   handler(path, ssm);
   body = ssm.str();
-  //BOOST_ASSERT(!body.empty());
+  // BOOST_ASSERT(!body.empty());
 
   // Cache the size since we need it after the move
   auto const size = body.size();
@@ -170,7 +169,6 @@ void handle_request(const http_handler &handler,
     res.keep_alive(req.keep_alive());
     return send(std::move(res));
   }
-
 
   // Respond to GET request
   http::response<http::string_body> res{
@@ -193,8 +191,7 @@ void fail(beast::error_code ec, char const *what) {
 
 // This is the C++11 equivalent of a generic lambda.
 // The function object is used to send an HTTP message.
-template<class Stream>
-struct send_lambda {
+template<class Stream> struct send_lambda {
   Stream &stream_;
   bool &close_;
   beast::error_code &ec_;
@@ -216,9 +213,7 @@ struct send_lambda {
 };
 
 // Handles an HTTP server connection
-void do_session(const http_handler &handler,
-                const ptr<tcp::socket> &socket
-) {
+void do_session(const http_handler &handler, const ptr<tcp::socket> &socket) {
   bool close = false;
   beast::error_code ec;
 
@@ -258,7 +253,7 @@ void do_session(const http_handler &handler,
 //------------------------------------------------------------------------------
 void debug_server::start_thd() {
   ctx_->run();
-  BOOST_LOG_TRIVIAL(info) << "debug server stopped";
+  LOG(info) << "debug server stopped";
 }
 
 void debug_server::async_accept() {
@@ -266,16 +261,18 @@ void debug_server::async_accept() {
   ptr<tcp::socket> socket(new tcp::socket{*ctx_});
 
   // Async accept
-  acceptor_->async_accept(*socket, [socket, this](boost::system::error_code ec) {
-    if (!ec.failed()) {
-      // Launch the session, transferring ownership of the socket
-      handle_accept(socket);
-    } else {
-      if (not ctx_->stopped()) {
-        BOOST_LOG_TRIVIAL(error) << "accept error , " << ec.message();
-      }
-    }
-  });
+  acceptor_->async_accept(*socket,
+                          [socket, this](boost::system::error_code ec) {
+                            if (!ec.failed()) {
+                              // Launch the session, transferring ownership of
+                              // the socket
+                              handle_accept(socket);
+                            } else {
+                              if (not ctx_->stopped()) {
+                                LOG(error) << "accept error , " << ec.message();
+                              }
+                            }
+                          });
 }
 
 void debug_server::handle_accept(ptr<tcp::socket> sock) {
@@ -307,8 +304,7 @@ void debug_server::start() {
   acceptor_->listen();
   // The acceptor receives incoming connections
 
-  thd_.emplace_back(std::make_shared<boost::thread>(
-      [this] { start_thd(); }));
+  thd_.emplace_back(std::make_shared<boost::thread>([this] { start_thd(); }));
   async_accept();
 }
 

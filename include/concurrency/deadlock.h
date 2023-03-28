@@ -1,17 +1,21 @@
 #pragma once
 
-#include "common/wait_path.h"
 #include "common/ctx_strand.h"
 #include "common/notify.h"
-#include <boost/asio.hpp>
-#include "network/net_service.h"
 #include "common/timer.h"
+#include "common/define.h"
+#include "common/wait_path.h"
+#include "network/net_service.h"
+#include <boost/asio.hpp>
+#include <memory>
 
 typedef std::function<void(xid_t)> fn_victim;
-typedef std::function<result<void>(tx_wait_set &ds_out)> fn_wait_lock;
-
-class deadlock : public ctx_strand, public std::enable_shared_from_this<deadlock> {
- private:
+typedef std::function<void(ptr<tx_wait> ds_out)> fn_handle_wait_set;
+typedef std::function<result<void>(fn_handle_wait_set)> fn_wait_lock;
+class deadlock : public ctx_strand,
+                 public std::enable_shared_from_this<deadlock> {
+private:
+  bool wait_die_;
   bool detecting_;
   bool distributed_;
   fn_victim fn_victim_;
@@ -21,19 +25,27 @@ class deadlock : public ctx_strand, public std::enable_shared_from_this<deadlock
 
   std::recursive_mutex mutex_;
   std::vector<ptr<dependency_set>> dep_;
-  std::vector<ptr<tx_wait_set>> set_;
+  std::vector<ptr<tx_wait>> set_;
   std::vector<xid_t> removed_;
-  std::mutex timer_mutex_;
   ptr<timer> timer_;
   std::random_device rd_;
-  std::mt19937 g_;
   std::uniform_int_distribution<uint64_t> rnd_;
+  uint64_t deadlock_detect_ms_;
+  uint64_t lock_wait_timeout_ms_;
   uint32_t num_shard_;
   notify notify_;
- public:
-  deadlock(fn_victim fn, net_service *service, uint32_t num_shard);
+  uint64_t time_ms_;
 
-  void tick();
+public:
+  deadlock(fn_victim fn,
+           net_service *service,
+           uint32_t num_shard,
+           bool deadlock_detection,
+           uint64_t detect_timeout_ms,
+           uint64_t lock_wait_timeout_ms
+  );
+
+  void start();
 
   void stop_and_join();
 
@@ -43,13 +55,16 @@ class deadlock : public ctx_strand, public std::enable_shared_from_this<deadlock
   void debug_deadlock(std::ostream &os);
   // invoke by CCB thread
   void tx_finish(xid_t xid);
-  void async_wait_lock(fn_wait_lock fn);
- private:
+  void async_wait_lock(fn_wait_lock wait);
+
+private:
+
+  void tick();
   void add_dependency(const ptr<dependency_set> ds);
 
   void detect();
-
-  void add_wait_set(const ptr<tx_wait_set> ws);
+  void async_victim(xid_t xid);
+  void add_wait_set(const ptr<tx_wait> ws);
 
   void gut_recv_dependency(const ptr<dependency_set> ds);
 

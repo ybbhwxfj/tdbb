@@ -16,7 +16,7 @@
 */
 
 #ifdef HAVE_CONFIG_H
-# include "config.h"
+#include "config.h"
 #endif
 #ifdef _WIN32
 #include "sb_win.h"
@@ -29,20 +29,20 @@
 
 #include "sb_percentile.h"
 
-int sb_percentile_init(sb_percentile_t *percentile,
-                       unsigned int size, double range_min, double range_max) {
-  percentile->values = (unsigned long long *)
-      calloc(size, sizeof(unsigned long long));
-  percentile->tmp = (unsigned long long *)
-      calloc(size, sizeof(unsigned long long));
+int sb_percentile_init(sb_percentile_t *percentile, unsigned int size,
+                       double range_min, double range_max) {
+  percentile->values =
+      (unsigned long long *)calloc(size, sizeof(unsigned long long));
+  percentile->tmp =
+      (unsigned long long *)calloc(size, sizeof(unsigned long long));
   if (percentile->values == NULL || percentile->tmp == NULL) {
-    //log_text(LOG_FATAL, "Cannot allocate values array, size = %u", size);
+    // log_text(LOG_FATAL, "Cannot allocate values array, size = %u", size);
     return 1;
   }
 
   percentile->range_deduct = log(range_min);
-  percentile->range_mult = (size - 1) / (log(range_max) -
-      percentile->range_deduct);
+  percentile->range_mult =
+      (size - 1) / (log(range_max) - percentile->range_deduct);
   percentile->range_min = range_min;
   percentile->range_max = range_max;
   percentile->size = size;

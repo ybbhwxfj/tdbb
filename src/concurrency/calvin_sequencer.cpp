@@ -1,49 +1,51 @@
 
 #include "concurrency/calvin_sequencer.h"
 #ifdef DB_TYPE_CALVIN
+#include "common/panic.h"
+#include "common/define.h"
+#include "common/variable.h"
 #include <algorithm>
 #include <memory>
 #include <utility>
-#include "common/variable.h"
-#include "common/define.h"
 
-template<> enum_strings<epoch_state>::e2s_t enum_strings<epoch_state>::enum2str = {
+template<>
+enum_strings<epoch_state>::e2s_t enum_strings<epoch_state>::enum2str = {
     {EPOCH_IDLE, "EPOCH_IDLE"},
     {EPOCH_PENDING, "EPOCH_PENDING"},
 };
 
-calvin_sequencer::calvin_sequencer(
-    config conf,
-    net_service *service,
-    fn_scheduler fn) :
-    conf_(std::move(conf)),
-    epoch_(1),
-    service_(service),
-    scheduler_(std::move(fn)),
-    state_(EPOCH_IDLE),
-    is_lead_(false),
-    handle_tx_(false),
-    timer_strand_(service->get_service(SERVICE_ASYNC_CONTEXT)) {
+calvin_sequencer::calvin_sequencer(const config &conf,
+                                   boost::asio::io_context::strand strand,
+                                   net_service *service, fn_scheduler fn)
+    : conf_(conf), epoch_(1), service_(service), scheduler_(fn),
+      state_(EPOCH_IDLE), is_lead_(false), is_priority_leader_(false),
+      start_(false), strand_(strand) {
+  node_id_ = conf_.priority_lead_nodes();
+  auto iter = node_id_.find(TO_RG_ID(conf_.node_id()));
+  if (iter != node_id_.end()) {
+    if (iter->second == conf_.node_id()) {
+      is_priority_leader_ = true;
+    }
+  }
 
+  BOOST_ASSERT(node_id_.size() == conf_.num_rg());
 }
 
 void calvin_sequencer::handle_tx_request(const tx_request &tx) {
-  std::scoped_lock l(mutex_);
+
 #ifdef TX_TRACE
-  trace_message_ += "h tx_rm;";
+  trace_message_ << "h tx_rm;";
 #endif
-  if (not handle_tx_) {
-    handle_tx_ = true;
-  }
+
   for (const tx_operation &o : tx.operations()) {
-    auto i = tx_request_next_epoch_.find(o.rg_id());
+    auto i = tx_request_next_epoch_.find(o.sd_id());
     if (i == tx_request_next_epoch_.end()) {
       ptr<tx_request> t(new tx_request());
       t->set_terminal_id(tx.terminal_id());
       t->set_xid(tx.xid());
       t->set_source(conf_.node_id());
       *t->add_operations() = o;
-      tx_request_next_epoch_[o.rg_id()][tx.xid()] = t;
+      tx_request_next_epoch_[o.sd_id()][tx.xid()] = t;
     } else {
       auto ii = i->second.find(tx.xid());
       if (ii == i->second.end()) {
@@ -60,18 +62,27 @@ void calvin_sequencer::handle_tx_request(const tx_request &tx) {
   }
 }
 
+void calvin_sequencer::start() {
+  auto self = shared_from_this();
+  boost::asio::post(strand_, [self] { self->start_ = true; });
+}
+
 void calvin_sequencer::tick() {
+  uint32_t ms = conf_.get_tpcc_config().calvin_epoch_ms();
+  if (not is_lead_ || not is_priority_leader_) {
+    ms = ms * 10;
+  }
+  auto self = shared_from_this();
   ptr<boost::asio::steady_timer> timer_tick_;
   timer_tick_.reset(new boost::asio::steady_timer(
       service_->get_service(SERVICE_ASYNC_CONTEXT),
-      boost::asio::chrono::milliseconds(conf_.get_tpcc_config().calvin_epoch_ms())));
+      boost::asio::chrono::milliseconds(ms)));
   auto fn_timeout = boost::asio::bind_executor(
-      timer_strand_,
-      [timer_tick_, this](const boost::system::error_code &error) {
+      strand_, [timer_tick_, self](const boost::system::error_code &error) {
         if (not error.failed()) {
-          tick();
+          self->tick();
         } else {
-          BOOST_LOG_TRIVIAL(error) << " async wait error " << error.message();
+          LOG(error) << " async wait error " << error.message();
         }
       });
   timer_tick_->async_wait(fn_timeout);
@@ -79,58 +90,66 @@ void calvin_sequencer::tick() {
   epoch_broadcast_request();
 }
 
-void calvin_sequencer::update_shard_lead(shard_id_t shard_id, node_id_t node_id) {
-  std::scoped_lock l(mutex_);
-  node_id_[shard_id] = node_id;
-}
-
-void calvin_sequencer::update_local_lead_state(bool lead) {
-  std::scoped_lock l(mutex_);
-  is_lead_ = lead;
-}
+void calvin_sequencer::update_local_lead_state(bool lead) { is_lead_ = lead; }
 
 void calvin_sequencer::epoch_broadcast_request() {
-  std::scoped_lock l(mutex_);
-  if (node_id_.size() != conf_.num_rg()) {
+  if (not start_) {
     return;
   }
-  if (not is_lead_ || not handle_tx_) {
+  if (node_id_.size() != conf_.num_rg()) {
+    LOG(trace) << "epoch_broadcast_request leader node != group number";
+    return;
+  }
+  if (not is_lead_ || not is_priority_leader_) {
+    LOG(trace) << "epoch_broadcast_request lead " << is_lead_ << " "
+               << is_priority_leader_;
     return;
   }
 
   if (state_ == EPOCH_IDLE) {
-    trace_message_ = "next epoch;";
-
-    local_epoch_.reset(new local_epoch_ctx());
-    local_epoch_->epoch_ = epoch_;
-
-    BOOST_ASSERT(local_epoch_->epoch_ == epoch_);
-
+#ifdef TX_TRACE
+    trace_message_.clear();
+    trace_message_ << "ne " << epoch_ << ";";
+#endif
+    ptr<local_epoch_ctx> epoch(new local_epoch_ctx());
+    epoch->epoch_ = epoch_;
+    local_epoch_.insert(std::make_pair(epoch->epoch_, epoch));
     state_ = EPOCH_PENDING;
 
     for (auto kv : node_id_) {
-      if (local_epoch_->ack_.contains(kv.first)) {
+      shard_id_t shard = TO_RG_ID(kv.first);
+      if (epoch->ack_.contains(shard)) {
+        LOG(error) << id_2_name(conf_.node_id()) << " contains ACK of"
+                   << id_2_name(kv.second);
         BOOST_ASSERT(false);
+        trace_message_ << "contains" << id_2_name(kv.second) << ";";
         continue;
       }
       node_id_t nid = kv.second;
-      auto msg = std::make_shared<calvin_epoch>();
-
+      auto msg = cs_new<calvin_epoch>();
+      // LOG(trace) << "calvin send request to " << id_2_name(nid);
       msg->set_dest(nid);
       msg->set_source(conf_.node_id());
-      msg->set_epoch(local_epoch_->epoch_);
+      msg->set_epoch(epoch->epoch_);
       shard_id_t sid = TO_RG_ID(nid);
       auto i1 = tx_request_next_epoch_.find(sid);
       if (i1 != tx_request_next_epoch_.end()) {
         for (std::pair<xid_t, ptr<tx_request>> r : i1->second) {
           *msg->add_request() = *r.second;
         }
+      } else {
+        // no transactions access this shard
       }
-      BOOST_LOG_TRIVIAL(trace) << id_2_name(conf_.node_id()) << " send calvin epoch " << local_epoch_->epoch_ << " to "
-                               << id_2_name(nid);
-      auto r = service_->async_send(nid, CALVIN_EPOCH, msg);
+      // LOG(trace) << id_2_name(conf_.node_id())
+      //                         << " send calvin epoch " << msg->epoch() << "
+      //                         to "
+      //                         << id_2_name(nid);
+      // TODO ...
+      // this message must not be lost
+      epoch->ssm_ << "snd " << id_2_name(msg->dest()) << ";";
+      auto r = service_->async_send(nid, CALVIN_EPOCH, msg, true);
       if (!r) {
-        BOOST_LOG_TRIVIAL(error) << "async send calvin epoch error...";
+        LOG(error) << "async send calvin epoch error...";
       }
     }
     tx_request_next_epoch_.clear();
@@ -139,12 +158,15 @@ void calvin_sequencer::epoch_broadcast_request() {
 }
 
 void calvin_sequencer::handle_epoch(const calvin_epoch &msg) {
-  std::scoped_lock l(mutex_);
+  // LOG(trace) << id_2_name(conf_.node_id()) << " handle calvin epoch " <<
+  // msg.epoch() << " from "
+  //                        << id_2_name(msg.source());
   BOOST_ASSERT(conf_.node_id() == msg.dest());
 
   uint64_t epoch = msg.epoch();
 #ifdef TX_TRACE
-  trace_message_ += "h ep " + std::to_string(epoch) + " fm " + id_2_name(msg.source()) + ";";
+  trace_message_ << "h ep " << std::to_string(epoch) << " fm "
+                 << id_2_name(msg.source()) << ";";
 #endif
   auto it = epoch_ctx_receive_.find(epoch);
   ptr<calvin_epoch_ops> ctx;
@@ -173,28 +195,38 @@ void calvin_sequencer::handle_epoch(const calvin_epoch &msg) {
 
 void calvin_sequencer::handle_epoch_ack(const calvin_epoch_ack &msg) {
   BOOST_ASSERT(msg.dest() == conf_.node_id());
-  //BOOST_LOG_TRIVIAL(trace) << "epoch ack , from: " << id_2_name(msg.source()) << " to: " << id_2_name(conf_.node_id());
-  std::scoped_lock l(mutex_);
-  shard_id_t shard_id = msg.source();
-  if (not local_epoch_) {
+  // LOG(trace) << "epoch ack , from: " << id_2_name(msg.source()) << " to: " <<
+  // id_2_name(conf_.node_id());
+
+  shard_id_t shard_id = TO_RG_ID(msg.source());
+  uint64_t epoch = msg.epoch();
+  auto iter = local_epoch_.find(epoch);
+  if (local_epoch_.end() == iter) {
+    trace_message_ << "ack ep null;";
+    LOG(error) << "local epoch = null";
     return;
   }
-  BOOST_ASSERT(local_epoch_->epoch_ == msg.epoch());
-  local_epoch_->ack_.insert(shard_id);
+  ptr<local_epoch_ctx> epoch_ctx = iter->second;
+  BOOST_ASSERT(epoch_ctx->epoch_ == msg.epoch());
+  epoch_ctx->ack_.insert(shard_id);
 #ifdef TX_TRACE
-  trace_message_ += "ack fm " + id_2_name(msg.source()) + ";";
+  trace_message_ << "ack fm " << id_2_name(msg.source()) << ";";
 #endif
-  if (local_epoch_->ack_.size() == node_id_.size()) {
-    local_epoch_.reset();  // ready to send next epoch
-    epoch_ctx_receive_.erase(msg.epoch());
+  if (epoch_ctx->ack_.size() == node_id_.size()) {
+    local_epoch_.erase(epoch); // ready to send next epoch
+    epoch_ctx_receive_.erase(epoch);
+    if (epoch + 1 != epoch_) {
+      LOG(error) << "calvin error epoch " << epoch << ":" << epoch_;
+    }
     state_ = EPOCH_IDLE;
   }
 }
 
 void calvin_sequencer::reorder_request(const ptr<calvin_epoch_ops> &ctx) {
-  BOOST_LOG_TRIVIAL(trace) << id_2_name(conf_.node_id()) << " reorder epoch " << ctx->epoch_ << " batch request";
+  LOG(trace) << id_2_name(conf_.node_id()) << " reorder epoch " << ctx->epoch_
+             << " batch request";
 #ifdef TX_TRACE
-  trace_message_ += "rrd ep " + std::to_string(ctx->epoch_) + ";";
+  trace_message_ << "rrd ep " << ctx->epoch_ << ";";
 #endif
   for (auto kv : node_id_) {
     ctx->node_ids_.insert(kv.second);
@@ -203,14 +235,15 @@ void calvin_sequencer::reorder_request(const ptr<calvin_epoch_ops> &ctx) {
     return o1->xid() < o2->xid();
   };
   std::sort(ctx->reqs_.begin(), ctx->reqs_.end(), sorter);
-  //BOOST_LOG_TRIVIAL(trace) << id_2_name(conf_.node_id()) << " schedule " << e->epoch_  << " num ops " << e->ops_.size();
+  // LOG(trace) << id_2_name(conf_.node_id()) << " schedule " << e->epoch_  << "
+  // num ops " << e->ops_.size();
 
   schedule(ctx);
 }
 
 void calvin_sequencer::schedule(const ptr<calvin_epoch_ops> &ops) {
 #ifdef TX_TRACE
-  trace_message_ += "sch ;";
+  trace_message_ << "sch ;";
 #endif
   scheduler_(ops);
 }
@@ -219,7 +252,7 @@ void calvin_sequencer::debug_tx(std::ostream &os) {
   os << "calvin sequencer epoch " << epoch_ << std::endl;
   os << "calvin sequencer epoch state " << enum2str(state_) << std::endl;
   os << "calvin sequencer epoch , trace: " << std::endl;
-  os << "    " << trace_message_ << std::endl;
+  os << "    " << trace_message_.str() << std::endl;
   for (const auto &x : epoch_ctx_receive_) {
     os << " epoch :" << x.first;
     for (auto id : x.second->shard_ids_) {
@@ -230,6 +263,13 @@ void calvin_sequencer::debug_tx(std::ostream &os) {
       os << " node id :" << id_2_name(id);
     }
     os << std::endl;
+  }
+  for (auto n : local_epoch_) {
+    os << "epoch: " << n.first;
+    os << " trace : " << n.second->ssm_.str();
+    for (auto id : n.second->ack_) {
+      os << " acks shard:" << id << std::endl;
+    }
   }
   os << "calvin lead: ";
   for (auto kv : node_id_) {

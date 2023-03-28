@@ -1,34 +1,19 @@
 syntax = "proto3";
 
-
-import "tx_log.proto";
-
-
-message replay_to_ccb_request {
-  uint32 source = 1;
-  uint32 dest = 2;
-  uint64 cno = 3;
-  repeated tx_log logs = 4;
-}
-
-message replay_to_ccb_response {
-  uint32 source = 1;
-  uint32 dest = 2;
-  uint32 error_code = 3;
-  repeated tx_log logs = 4;
-}
-
+import "tx_operation.proto";
 
 message replay_to_dsb_request {
   uint32 source = 1;
   uint32 dest = 2;
   uint64 cno = 3;
-  repeated tx_log logs = 4;
+  bytes repeated_tx_logs = 4;
+  repeated tx_operation operations = 5;
 }
 
 message replay_to_dsb_response {
   uint32 source = 1;
   uint32 dest = 2;
   uint32 error_code = 3;
-  repeated tx_log logs = 4;
+  bytes repeated_tx_logs = 4;
+  repeated tx_operation operations = 5;
 }

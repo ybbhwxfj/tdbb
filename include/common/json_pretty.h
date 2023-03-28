@@ -1,3 +1,4 @@
+#pragma once
 #include <boost/json.hpp>
 #include <iomanip>
 #include <iostream>
@@ -11,7 +12,7 @@ inline json::value parse_file(std::istream &sm) {
   do {
     sm.read(buf, sizeof(buf));
     size_t size = sm.gcount();
-    if (size == 0) {
+    if (size==0) {
       break;
     }
     p.write(buf, size, ec);
@@ -24,77 +25,77 @@ inline json::value parse_file(std::istream &sm) {
   return p.release();
 }
 
-inline void
-pretty_print(std::ostream &os, json::value const &jv, std::string *indent = nullptr) {
+inline void pretty_print(std::ostream &os, json::value const &jv,
+                         std::string *indent = nullptr) {
   std::string indent_;
   if (!indent)
     indent = &indent_;
   switch (jv.kind()) {
-    case json::kind::object: {
-      os << "{\n";
-      indent->append(4, ' ');
-      auto const &obj = jv.get_object();
-      if (!obj.empty()) {
-        auto it = obj.begin();
-        for (;;) {
-          os << *indent << json::serialize(it->key()) << " : ";
-          pretty_print(os, it->value(), indent);
-          if (++it == obj.end())
-            break;
-          os << ",\n";
-        }
+  case json::kind::object: {
+    os << "{\n";
+    indent->append(4, ' ');
+    auto const &obj = jv.get_object();
+    if (!obj.empty()) {
+      auto it = obj.begin();
+      for (;;) {
+        os << *indent << json::serialize(it->key()) << " : ";
+        pretty_print(os, it->value(), indent);
+        if (++it==obj.end())
+          break;
+        os << ",\n";
       }
-      os << "\n";
-      indent->resize(indent->size() - 4);
-      os << *indent << "}";
-      break;
     }
+    os << "\n";
+    indent->resize(indent->size() - 4);
+    os << *indent << "}";
+    break;
+  }
 
-    case json::kind::array: {
-      os << "[\n";
-      indent->append(4, ' ');
-      auto const &arr = jv.get_array();
-      if (!arr.empty()) {
-        auto it = arr.begin();
-        for (;;) {
-          os << *indent;
-          pretty_print(os, *it, indent);
-          if (++it == arr.end())
-            break;
-          os << ",\n";
-        }
+  case json::kind::array: {
+    os << "[\n";
+    indent->append(4, ' ');
+    auto const &arr = jv.get_array();
+    if (!arr.empty()) {
+      auto it = arr.begin();
+      for (;;) {
+        os << *indent;
+        pretty_print(os, *it, indent);
+        if (++it==arr.end())
+          break;
+        os << ",\n";
       }
-      os << "\n";
-      indent->resize(indent->size() - 4);
-      os << *indent << "]";
-      break;
     }
+    os << "\n";
+    indent->resize(indent->size() - 4);
+    os << *indent << "]";
+    break;
+  }
 
-    case json::kind::string: {
-      os << json::serialize(jv.get_string());
-      break;
-    }
+  case json::kind::string: {
+    os << json::serialize(jv.get_string());
+    break;
+  }
 
-    case json::kind::uint64:
-      \
-os << jv.get_uint64();
-      break;
+  case json::kind::uint64:
 
-    case json::kind::int64:os << jv.get_int64();
-      break;
+    os << jv.get_uint64();
+    break;
 
-    case json::kind::double_:os << jv.get_double();
-      break;
+  case json::kind::int64:os << jv.get_int64();
+    break;
 
-    case json::kind::bool_:
-      if (jv.get_bool())
-        os << "true";
-      else
-        os << "false";
-      break;
+  case json::kind::double_:os << jv.get_double();
+    break;
 
-    case json::kind::null:os << "null";
-      break;
+  case json::kind::bool_:
+    if (jv.get_bool())
+      os << "true";
+    else
+      os << "false";
+    break;
+
+  case json::kind::null:os << "null";
+    break;
   }
 
   if (indent->empty())
@@ -106,13 +107,10 @@ inline int json_pretty(std::istream &is, std::ostream &os) {
     // Parse the file as JSON
     auto const jv = parse_file(is);
 
-// Now pretty-print the value
+    // Now pretty-print the value
     pretty_print(os, jv);
-  }
-  catch (std::exception const &e) {
-    std::cerr <<
-              "Caught exception: "
-              << e.what() << std::endl;
+  } catch (std::exception const &e) {
+    std::cerr << "Caught exception: " << e.what() << std::endl;
     return EXIT_FAILURE;
   }
 

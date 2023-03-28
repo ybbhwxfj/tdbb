@@ -3,8 +3,8 @@
 set(binary_name block-db)
 add_executable(
         ${binary_name}
-        block-db.cpp
-        portal.cpp)
+        main_be.cpp
+        portal_server.cpp)
 # "Boost_XXX_LIBRARY" is case sensitive
 target_link_libraries(
         ${binary_name}
@@ -14,7 +14,6 @@ target_link_libraries(
         raft
         network
         proto
-        panel
         common
         pthread
         ${STORAGE_LIBS}
@@ -28,15 +27,17 @@ target_link_libraries(
 
 add_library(
         portal
-        portal.cpp
+        portal_server.cpp
         portal_client.cpp
+        block_client.cpp
         workload.cpp
 )
 
 add_executable(
         block-client
-        block-client.cpp
+        main_fe.cpp
         portal_client.cpp
+        block_client.cpp
         workload.cpp)
 
 target_link_libraries(

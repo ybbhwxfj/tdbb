@@ -1,35 +1,25 @@
 #pragma once
+#include "common/block_exception.h"
+#include "common/block_type.h"
+#include "common/config.h"
 #include "common/db_type.h"
 #include "common/variable.h"
+#include "common/config_option.h"
 #include "portal/portal.h"
-#include "common/block_exception.h"
-#include "common/config.h"
-#include "common/block_type.h"
+#include <boost/algorithm/string/case_conv.hpp>
+#include <boost/date_time.hpp>
+#include <boost/filesystem.hpp>
+#include <boost/format.hpp>
 #include <fstream>
 #include <iostream>
 #include <sstream>
-#include <boost/filesystem.hpp>
-#include <boost/algorithm/string/case_conv.hpp>
-#include <boost/date_time.hpp>
 #include <string>
-
-#define NUM_AZ 3
-#define NUM_RG 5
+#include "common/panic.h"
 
 extern std::string global_test_db_path;
 
-const static std::string TMP_DB_PATH = "/tmp/test_db";
-const static char *BLOCK_ARRAY[] = {CCB, RLB, DSB};
+const static std::string TMP_DB_PATH = "test_db";
 
-struct config_option {
-  config_option() :
-      loose_bind(false),
-      num_az(NUM_AZ),
-      num_shard(NUM_RG) {}
-  bool loose_bind;
-  uint32_t num_az;
-  uint32_t num_shard;
-};
 inline std::string schema_json_path() {
   boost::filesystem::path p(__FILE__);
   // block-db/test/portal/__FILE__
@@ -68,136 +58,173 @@ inline void init_config(config &c, std::string node_name, std::string path) {
   tc.set_hot_item_num(HOT_ROW_NUM);
   tc.set_percent_non_exist_item(PERCENT_NON_EXIST_ITEM);
   if (block_db_type() == DB_S) {
-    tc.set_percent_distributed(0.0);
+    tc.set_percent_remote_wh(0.2);
   } else {
-    tc.set_percent_distributed(PERCENT_DISTRIBUTED);
+    tc.set_percent_remote_wh(PERCENT_REMOTE);
   }
 }
 
-inline std::vector<config> generate_config(const config_option &option) {
-  bool loose_bind = option.loose_bind;
+inline std::string to_node_name(
+    az_id_t az,
+    std::vector<shard_id_t> shard_ids,
+    std::vector<block_type_t> block_types) {
+  std::stringstream ssm;
+  ssm << "node_";
+  ssm << "az_" << az << "_" << "sd";
+  for (shard_id_t id : shard_ids) {
+    ssm << "_" << id;
+  }
+  ssm << "_bt";
+  for (block_type_t bt : block_types) {
+    ssm << "_" << boost::algorithm::to_lower_copy(bt);
+  }
+  return ssm.str();
+}
+
+inline std::pair<std::vector<config>, std::vector<config>>
+generate_config(const config_option &option) {
+  bool has_priority = option.priority;
   uint32_t num_az = option.num_az;
-  uint32_t num_shard = option.num_shard;
-  std::vector<config> vec_config;
-  std::vector<node_config> nc_list;
+  BOOST_ASSERT(option.binding.size() > 0);
+  std::vector<config> server_config;
+  std::vector<node_config> server_list;
   std::map<std::string, uint32_t> az2priority;
 
   std::string path = global_test_db_path;
 
-  for (uint32_t i = 0; i < num_az; i++) {
+  for (uint32_t h = 0; h < num_az; h++) {
     // AZ naming rule must be modified
     // GOTO AZ_NAMING_RULE
-    az_id_t az_id = i + 1;
+    az_id_t az_id = h + 1;
     std::string az_name = "az" + std::to_string(az_id);
     az2priority.insert(std::make_pair(az_name, 0));
-    for (uint32_t j = 0; j < num_shard; j++) {
-      shard_id_t rg_id = j + 1;
-      std::string rg_name = "rg" + std::to_string(rg_id);
-      int num = int(sizeof(BLOCK_ARRAY) / sizeof(BLOCK_ARRAY[0]));
-      for (int k = 0; k < num; k++) {
-        std::string node_name(std::string("node_") + "az" +
-            std::to_string(az_id) + "rg" +
-            std::to_string(rg_id));
+    for (size_t i = 0; i < option.binding.size(); i++) {
+      auto bind = option.binding[i];
+      std::vector<std::string> block_types;
+
+      for (auto block : bind) {
+        block_types.push_back(block);
+      }
+      BOOST_ASSERT(bind.size() > 0);
+      uint32_t shard_id = 0;
+      uint32_t num_shards = option.get_num_shard(bind[0]);
+      uint32_t max_shard = option.get_max_num_shard();
+      uint32_t num_shard_per_group = max_shard / num_shards;
+      for (uint32_t j = 0; j < num_shards;) {
+        std::vector<std::string> shard_names;
+        std::vector<shard_id_t> shard_ids;
         node_config nc;
         nc.set_address("127.0.0.1");
         nc.set_az_name(az_name);
-        nc.set_rg_name(rg_name);
-
-        if (loose_bind) {
-          block_type_t bt = BLOCK_ARRAY[k];
-          nc.add_node_type(bt);
-          std::string name = node_name + boost::algorithm::to_lower_copy(bt);
-
-          nc.set_node_name(name);
-          nc.set_port(8000 + az_id + rg_id * 10 + (k + 1) * 100);
-          nc_list.push_back(nc);
-          config c;
-          init_config(c, name, path);
-          vec_config.push_back(c);
-        } else {
-          nc.add_node_type(BLOCK_CCB);
-          nc.add_node_type(BLOCK_RLB);
-          nc.add_node_type(BLOCK_DSB);
-          nc.set_node_name(node_name);
-          nc.set_port(8000 + az_id + rg_id * 10);
-          nc_list.push_back(nc);
-          config c;
-          init_config(c, node_name, path);
-          vec_config.push_back(c);
-          break;
+        for (uint32_t k = 0; k < num_shard_per_group; k++, j++) {
+          shard_id += 1;
+          std::string rg_name = "sd_id" + std::to_string(shard_id);
+          nc.add_rg_name(rg_name);
+          shard_ids.push_back(shard_id);
         }
+        std::string node_name = to_node_name(az_id, shard_ids, block_types);
+        nc.set_node_name(node_name);
+        nc.set_port(8000 + az_id + shard_ids[0] * 10 + (i + 1) * 100);
+        nc.set_repl_port(7000 + az_id + shard_ids[0] * 10 + (i + 1) * 100);
+        for (auto b : block_types) {
+          nc.add_node_type(b);
+        }
+        server_list.push_back(nc);
+        config c;
+        init_config(c, node_name, path);
+        server_config.push_back(c);
       }
     }
   }
+  BOOST_ASSERT(server_list.size() > 0);
   uint32_t priority = 0;
   for (auto iter = az2priority.begin(); iter != az2priority.end(); iter++) {
-    iter->second = ++priority;
+    if (has_priority) {
+      ++priority;
+    }
+    iter->second = priority;
   }
 
-  for (node_config &nc : nc_list) {
+  for (node_config &nc : server_list) {
     nc.set_priority(az2priority[nc.az_name()]);
   }
-  for (auto &c : vec_config) {
-    std::copy(nc_list.begin(), nc_list.end(),
-              std::back_inserter(c.mutable_node_config_list()));
+
+  for (auto &c : server_config) {
+    std::copy(server_list.begin(), server_list.end(),
+              std::back_inserter(c.mutable_node_server_list()));
   }
 
-  node_config node_panel_conf;
-  {
-    node_panel_conf.set_address("127.0.0.1");
-    node_panel_conf.set_node_name("panel");
-    node_panel_conf.set_rg_name("");
-    node_panel_conf.set_port(8100);
-    node_panel_conf.set_az_name("az3");
-    node_panel_conf.add_node_type(BLOCK_PNB);
-    config panel_conf;
-    init_config(panel_conf, node_panel_conf.node_name(), path);
-    std::copy(nc_list.begin(), nc_list.end(),
-              std::back_inserter(panel_conf.mutable_node_config_list()));
-    panel_conf.mutable_this_node_config() = node_panel_conf;
-    vec_config.push_back(panel_conf);
+  std::vector<node_config> client_list;
+  std::vector<config> client_config;
+  for (uint32_t i = 0; i < option.num_client; i++) {
+    uint32_t id = i + 1;
+    node_config node_cli_conf;
+    {
+      node_cli_conf.set_node_name((boost::format("client_%d") % id).str());
+      node_cli_conf.add_rg_name((boost::format("id%d") % id).str());
+      node_cli_conf.set_port(9000 + id);
+      node_cli_conf.set_repl_port(10100 + id);
+      node_cli_conf.set_az_name("az3");
+      node_cli_conf.add_node_type(BLOCK_CLIENT);
+      client_list.push_back(node_cli_conf);
+    }
   }
 
-  node_config node_cli_conf;
-  {
-    node_cli_conf.set_node_name("client");
-    node_cli_conf.set_rg_name("");
-    node_cli_conf.set_port(8000);
-    node_cli_conf.set_az_name("az3");
-    node_cli_conf.add_node_type(BLOCK_CLIENT);
-    config cli_conf;
-    init_config(cli_conf, node_cli_conf.node_name(), path);
-    std::copy(nc_list.begin(), nc_list.end(),
-              std::back_inserter(cli_conf.mutable_node_config_list()));
-    cli_conf.mutable_this_node_config() = node_cli_conf;
-    vec_config.push_back(cli_conf);
+  for (config &c : server_config) {
+    std::copy(client_list.begin(), client_list.end(),
+              std::back_inserter(c.mutable_client_config()));
   }
-
-  for (auto &c : vec_config) {
-    c.mutable_client_config() = node_cli_conf;
-    c.panel_config() = node_panel_conf;
-    BOOST_ASSERT(c.client_config().node_name() == "client");
-    BOOST_ASSERT(c.panel_config().node_name() == "panel");
+  for (config &c : server_config) {
     c.re_generate_id();
   }
-  return vec_config;
+
+  for (const node_config &c : client_list) {
+    config cli_conf;
+    init_config(cli_conf, c.node_name(), path);
+    cli_conf.mutable_this_node_config() = c;
+    std::copy(server_list.begin(), server_list.end(),
+              std::back_inserter(cli_conf.mutable_node_server_list()));
+    std::copy(client_list.begin(), client_list.end(),
+              std::back_inserter(cli_conf.mutable_client_config()));
+    client_config.push_back(cli_conf);
+    BOOST_ASSERT(cli_conf.node_server_list().size() > 0);
+  }
+
+  for (auto &c : client_config) {
+    c.re_generate_id();
+  }
+  return std::make_pair(client_config, server_config);
 }
 
-// the last vector is block client configure file path
-inline std::vector<std::string> generate_config_json_file(const config_option &option) {
+// pair::first client configure
+// pair::second server configure
+inline std::pair<std::vector<std::string>, std::vector<std::string>>
+generate_config_json_file(const config_option &option) {
   std::vector<std::string> json_path;
-  std::vector<config> vec_config = generate_config(option);
-  for (auto &c : vec_config) {
-    boost::json::object j = c.to_json();
-    std::stringstream ssm;
-    ssm << j;
-    std::string json_str = ssm.str();
-    boost::filesystem::create_directories(c.db_path());
-    std::string file_name =
-        boost::filesystem::path(c.db_path()).append("conf.json").c_str();
-    json_path.push_back(file_name);
-    std::ofstream f(file_name);
-    f << json_str;
+  std::pair<std::vector<config>, std::vector<config>> cs_config =
+      generate_config(option);
+  std::vector<std::string> client_path;
+  std::vector<std::string> server_path;
+  std::vector<std::vector<config> *> vec;
+  vec.push_back(&cs_config.first);
+  vec.push_back(&cs_config.second);
+  for (auto ptr : vec) {
+    for (auto &c : *ptr) { // for each server
+      boost::json::object j = c.to_json();
+      std::stringstream ssm;
+      ssm << j;
+      std::string json_str = ssm.str();
+      boost::filesystem::create_directories(c.db_path());
+      std::string file_name =
+          boost::filesystem::path(c.db_path()).append("conf.json").c_str();
+      if (ptr == &cs_config.first) {
+        client_path.push_back(file_name);
+      } else {
+        server_path.push_back(file_name);
+      }
+      std::ofstream f(file_name);
+      f << json_str;
+    }
   }
-  return json_path;
+  return std::make_pair(client_path, server_path);
 }

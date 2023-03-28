@@ -13,9 +13,7 @@
 static int *nums = NULL;
 static int perm_count;
 
-void SetSeed(int seed) {
-  srand(seed);
-}
+void SetSeed(int seed) { srand(seed); }
 
 /*
  * return number uniformly distributed b/w min and max, inclusive
@@ -43,21 +41,22 @@ int NURand(unsigned A, unsigned x, unsigned y) {
   }
 
   switch (A) {
-    case 255: C = C_255;
-      break;
-    case 1023: C = C_1023;
-      break;
-    case 8191: C = C_8191;
-      break;
-    default:
-      fprintf(stderr,
-              "NURand: unexpected value (%d) of A used\n",
-              A);
-      abort();
+  case 255:
+    C = C_255;
+    break;
+  case 1023:
+    C = C_1023;
+    break;
+  case 8191:
+    C = C_8191;
+    break;
+  default:
+    fprintf(stderr, "NURand: unexpected value (%d) of A used\n", A);
+    abort();
   }
 
-  return (int)
-      (((RandomNumber(0, A) | RandomNumber(x, y)) + C) % (y - x + 1)) + x;
+  return (int)(((RandomNumber(0, A) | RandomNumber(x, y)) + C) % (y - x + 1)) +
+         x;
 }
 
 /*
@@ -71,7 +70,7 @@ int MakeAlphaString(int x, int y, char str[]) {
   static char *alphanum = "0123456789"
                           "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
                           "abcdefghijklmnopqrstuvwxyz";
-  int arrmax = 61;  /* index of last array element */
+  int arrmax = 61; /* index of last array element */
   register int i, len;
 
   len = RandomNumber(x, y);
@@ -133,7 +132,7 @@ void InitPermutation(void) {
 
   /* now, shuffle */
   for (i = 0; i < ORD_PER_DIST - 1; i++) {
-    j = (int) RandomNumber(i + 1, ORD_PER_DIST - 1);
+    j = (int)RandomNumber(i + 1, ORD_PER_DIST - 1);
     swap_int(nums[i], nums[j]);
   }
 }
@@ -158,17 +157,15 @@ int GetPermutation(void) {
  |      Lastname
  | DESCRIPTION
  |      TPC-C Lastname Function.
- | ARGUMENTS 
+ | ARGUMENTS
  |      num  - non-uniform random number
  |      name - last name string
  +==================================================================*/
-void Lastname(num, name)
-    int num;
-    char *name;
+void Lastname(num, name) int num;
+char *name;
 {
-  static char *n[] =
-      {"BAR", "OUGHT", "ABLE", "PRI", "PRES",
-       "ESE", "ANTI", "CALLY", "ATION", "EING"};
+  static char *n[] = {"BAR", "OUGHT", "ABLE",  "PRI",   "PRES",
+                      "ESE", "ANTI",  "CALLY", "ATION", "EING"};
 
   strcpy(name, n[num / 100]);
   strcat(name, n[(num / 10) % 10]);
@@ -176,4 +173,3 @@ void Lastname(num, name)
 
   return;
 }
-

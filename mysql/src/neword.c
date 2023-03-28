@@ -1,6 +1,6 @@
 /*
- * -*-C-*- 
- * neword.pc 
+ * -*-C-*-
+ * neword.pc
  * corresponds to A.1 in appendix A
  */
 
@@ -13,8 +13,8 @@
 #include "spt_proc.h"
 #include "tpc.h"
 
-#define pick_dist_info(ol_dist_info, ol_supply_w_id) \
-switch(ol_supply_w_id) { \
+#define pick_dist_info(ol_dist_info, ol_supply_w_id)                           \
+  switch (ol_supply_w_id) {                                                    \
 case 1: strncpy(ol_dist_info, s_dist_01, 25); break; \
 case 2: strncpy(ol_dist_info, s_dist_02, 25); break; \
 case 3: strncpy(ol_dist_info, s_dist_03, 25); break; \
@@ -25,7 +25,7 @@ case 7: strncpy(ol_dist_info, s_dist_07, 25); break; \
 case 8: strncpy(ol_dist_info, s_dist_08, 25); break; \
 case 9: strncpy(ol_dist_info, s_dist_09, 25); break; \
 case 10: strncpy(ol_dist_info, s_dist_10, 25); break; \
-}
+  }
 
 extern MYSQL **ctx;
 extern MYSQL_STMT ***stmt;
@@ -37,14 +37,13 @@ extern FILE *ftrx_file;
 /*
  * the new order transaction
  */
-int neword(int t_num,
-           int w_id_arg,        /* warehouse id */
-           int d_id_arg,        /* district id */
-           int c_id_arg,        /* customer id */
-           int o_ol_cnt_arg,            /* number of items */
-           int o_all_local_arg,    /* are all order lines local */
-           int itemid[],        /* ids of items to be ordered */
-           int supware[],        /* warehouses supplying items */
+int neword(int t_num, int w_id_arg, /* warehouse id */
+           int d_id_arg,            /* district id */
+           int c_id_arg,            /* customer id */
+           int o_ol_cnt_arg,        /* number of items */
+           int o_all_local_arg,     /* are all order lines local */
+           int itemid[],            /* ids of items to be ordered */
+           int supware[],           /* warehouses supplying items */
            int qty[]                /* quantity of each item */
 ) {
 
@@ -127,10 +126,13 @@ int neword(int t_num,
   param[1].buffer = &d_id;
   param[2].buffer_type = MYSQL_TYPE_LONG;
   param[2].buffer = &c_id;
-  if (mysql_stmt_bind_param(mysql_stmt, param)) goto sqlerr;
-  if (mysql_stmt_execute(mysql_stmt)) goto sqlerr;
+  if (mysql_stmt_bind_param(mysql_stmt, param))
+    goto sqlerr;
+  if (mysql_stmt_execute(mysql_stmt))
+    goto sqlerr;
 
-  if (mysql_stmt_store_result(mysql_stmt)) goto sqlerr;
+  if (mysql_stmt_store_result(mysql_stmt))
+    goto sqlerr;
   memset(column, 0, sizeof(MYSQL_BIND) * 4); /* initialize */
   column[0].buffer_type = MYSQL_TYPE_FLOAT;
   column[0].buffer = &c_discount;
@@ -142,19 +144,22 @@ int neword(int t_num,
   column[2].buffer_length = sizeof(c_credit);
   column[3].buffer_type = MYSQL_TYPE_FLOAT;
   column[3].buffer = &w_tax;
-  if (mysql_stmt_bind_result(mysql_stmt, column)) goto sqlerr;
+  if (mysql_stmt_bind_result(mysql_stmt, column))
+    goto sqlerr;
   switch (mysql_stmt_fetch(mysql_stmt)) {
-    case 0: //SUCCESS
-    case MYSQL_DATA_TRUNCATED: break;
-    case 1: //ERROR
-    case MYSQL_NO_DATA: //NO MORE DATA
-    default: mysql_stmt_free_result(mysql_stmt);
-      goto sqlerr;
+  case 0: // SUCCESS
+  case MYSQL_DATA_TRUNCATED:
+    break;
+  case 1:             // ERROR
+  case MYSQL_NO_DATA: // NO MORE DATA
+  default:
+    mysql_stmt_free_result(mysql_stmt);
+    goto sqlerr;
   }
   mysql_stmt_free_result(mysql_stmt);
 
 #ifdef DEBUG
-  printf("n %d\n",proceed);
+  printf("n %d\n", proceed);
 #endif
 
   proceed = 2;
@@ -170,23 +175,29 @@ int neword(int t_num,
   param[0].buffer = &d_id;
   param[1].buffer_type = MYSQL_TYPE_LONG;
   param[1].buffer = &w_id;
-  if (mysql_stmt_bind_param(mysql_stmt, param)) goto sqlerr;
-  if (mysql_stmt_execute(mysql_stmt)) goto sqlerr;
+  if (mysql_stmt_bind_param(mysql_stmt, param))
+    goto sqlerr;
+  if (mysql_stmt_execute(mysql_stmt))
+    goto sqlerr;
 
-  if (mysql_stmt_store_result(mysql_stmt)) goto sqlerr;
+  if (mysql_stmt_store_result(mysql_stmt))
+    goto sqlerr;
   memset(column, 0, sizeof(MYSQL_BIND) * 2); /* initialize */
   column[0].buffer_type = MYSQL_TYPE_LONG;
   column[0].buffer = &d_next_o_id;
   column[1].buffer_type = MYSQL_TYPE_FLOAT;
   column[1].buffer = &d_tax;
-  if (mysql_stmt_bind_result(mysql_stmt, column)) goto sqlerr;
+  if (mysql_stmt_bind_result(mysql_stmt, column))
+    goto sqlerr;
   switch (mysql_stmt_fetch(mysql_stmt)) {
-    case 0: //SUCCESS
-    case MYSQL_DATA_TRUNCATED: break;
-    case 1: //ERROR
-    case MYSQL_NO_DATA: //NO MORE DATA
-    default: mysql_stmt_free_result(mysql_stmt);
-      goto sqlerr;
+  case 0: // SUCCESS
+  case MYSQL_DATA_TRUNCATED:
+    break;
+  case 1:             // ERROR
+  case MYSQL_NO_DATA: // NO MORE DATA
+  default:
+    mysql_stmt_free_result(mysql_stmt);
+    goto sqlerr;
   }
   mysql_stmt_free_result(mysql_stmt);
 
@@ -203,13 +214,15 @@ int neword(int t_num,
   param[1].buffer = &d_id;
   param[2].buffer_type = MYSQL_TYPE_LONG;
   param[2].buffer = &w_id;
-  if (mysql_stmt_bind_param(mysql_stmt, param)) goto sqlerr;
-  if (mysql_stmt_execute(mysql_stmt)) goto sqlerr;
+  if (mysql_stmt_bind_param(mysql_stmt, param))
+    goto sqlerr;
+  if (mysql_stmt_execute(mysql_stmt))
+    goto sqlerr;
 
   o_id = d_next_o_id;
 
 #ifdef DEBUG
-  printf("n %d\n",proceed);
+  printf("n %d\n", proceed);
 #endif
 
   proceed = 4;
@@ -236,11 +249,13 @@ int neword(int t_num,
   param[5].buffer = &o_ol_cnt;
   param[6].buffer_type = MYSQL_TYPE_LONG;
   param[6].buffer = &o_all_local;
-  if (mysql_stmt_bind_param(mysql_stmt, param)) goto sqlerr;
-  if (mysql_stmt_execute(mysql_stmt)) goto sqlerr;
+  if (mysql_stmt_bind_param(mysql_stmt, param))
+    goto sqlerr;
+  if (mysql_stmt_execute(mysql_stmt))
+    goto sqlerr;
 
 #ifdef DEBUG
-  printf("n %d\n",proceed);
+  printf("n %d\n", proceed);
 #endif
 
   proceed = 5;
@@ -255,8 +270,10 @@ int neword(int t_num,
   param[1].buffer = &d_id;
   param[2].buffer_type = MYSQL_TYPE_LONG;
   param[2].buffer = &w_id;
-  if (mysql_stmt_bind_param(mysql_stmt, param)) goto sqlerr;
-  if (mysql_stmt_execute(mysql_stmt)) goto sqlerr;
+  if (mysql_stmt_bind_param(mysql_stmt, param))
+    goto sqlerr;
+  if (mysql_stmt_execute(mysql_stmt))
+    goto sqlerr;
 
   /* sort orders to avoid DeadLock */
   for (i = 0; i < o_ol_cnt; i++) {
@@ -266,7 +283,8 @@ int neword(int t_num,
     tmp = (MAXITEMS + 1) * supware[ol_num_seq[i]] + itemid[ol_num_seq[i]];
     min_num = i;
     for (j = i + 1; j < o_ol_cnt; j++) {
-      if ((MAXITEMS + 1) * supware[ol_num_seq[j]] + itemid[ol_num_seq[j]] < tmp) {
+      if ((MAXITEMS + 1) * supware[ol_num_seq[j]] + itemid[ol_num_seq[j]] <
+          tmp) {
         tmp = (MAXITEMS + 1) * supware[ol_num_seq[j]] + itemid[ol_num_seq[j]];
         min_num = j;
       }
@@ -294,10 +312,13 @@ int neword(int t_num,
     memset(param, 0, sizeof(MYSQL_BIND) * 1); /* initialize */
     param[0].buffer_type = MYSQL_TYPE_LONG;
     param[0].buffer = &ol_i_id;
-    if (mysql_stmt_bind_param(mysql_stmt, param)) goto sqlerr;
-    if (mysql_stmt_execute(mysql_stmt)) goto sqlerr;
+    if (mysql_stmt_bind_param(mysql_stmt, param))
+      goto sqlerr;
+    if (mysql_stmt_execute(mysql_stmt))
+      goto sqlerr;
 
-    if (mysql_stmt_store_result(mysql_stmt)) goto sqlerr;
+    if (mysql_stmt_store_result(mysql_stmt))
+      goto sqlerr;
     memset(column, 0, sizeof(MYSQL_BIND) * 3); /* initialize */
     column[0].buffer_type = MYSQL_TYPE_FLOAT;
     column[0].buffer = &i_price;
@@ -307,18 +328,21 @@ int neword(int t_num,
     column[2].buffer_type = MYSQL_TYPE_STRING;
     column[2].buffer = i_data;
     column[2].buffer_length = sizeof(i_data);
-    if (mysql_stmt_bind_result(mysql_stmt, column)) goto sqlerr;
+    if (mysql_stmt_bind_result(mysql_stmt, column))
+      goto sqlerr;
     switch (mysql_stmt_fetch(mysql_stmt)) {
-      case 0: //SUCCESS
-      case MYSQL_DATA_TRUNCATED: break;
+    case 0: // SUCCESS
+    case MYSQL_DATA_TRUNCATED:
+      break;
 
-      case MYSQL_NO_DATA: //NO MORE DATA
-        mysql_stmt_free_result(mysql_stmt);
-        goto invaliditem;
+    case MYSQL_NO_DATA: // NO MORE DATA
+      mysql_stmt_free_result(mysql_stmt);
+      goto invaliditem;
 
-      case 1: //ERROR
-      default: mysql_stmt_free_result(mysql_stmt);
-        goto sqlerr;
+    case 1: // ERROR
+    default:
+      mysql_stmt_free_result(mysql_stmt);
+      goto sqlerr;
     }
     mysql_stmt_free_result(mysql_stmt);
 
@@ -328,7 +352,7 @@ int neword(int t_num,
     /* EXEC SQL WHENEVER NOT FOUND GOTO sqlerr; */
 
 #ifdef DEBUG
-    printf("n %d\n",proceed);
+    printf("n %d\n", proceed);
 #endif
 
     proceed = 7;
@@ -349,10 +373,13 @@ int neword(int t_num,
     param[0].buffer = &ol_i_id;
     param[1].buffer_type = MYSQL_TYPE_LONG;
     param[1].buffer = &ol_supply_w_id;
-    if (mysql_stmt_bind_param(mysql_stmt, param)) goto sqlerr;
-    if (mysql_stmt_execute(mysql_stmt)) goto sqlerr;
+    if (mysql_stmt_bind_param(mysql_stmt, param))
+      goto sqlerr;
+    if (mysql_stmt_execute(mysql_stmt))
+      goto sqlerr;
 
-    if (mysql_stmt_store_result(mysql_stmt)) goto sqlerr;
+    if (mysql_stmt_store_result(mysql_stmt))
+      goto sqlerr;
     memset(column, 0, sizeof(MYSQL_BIND) * 12); /* initialize */
     column[0].buffer_type = MYSQL_TYPE_LONG;
     column[0].buffer = &s_quantity;
@@ -389,19 +416,21 @@ int neword(int t_num,
     column[11].buffer_type = MYSQL_TYPE_STRING;
     column[11].buffer = s_dist_10;
     column[11].buffer_length = sizeof(s_dist_10);
-    if (mysql_stmt_bind_result(mysql_stmt, column)) goto sqlerr;
+    if (mysql_stmt_bind_result(mysql_stmt, column))
+      goto sqlerr;
     switch (mysql_stmt_fetch(mysql_stmt)) {
-      case 0: //SUCCESS
-        break;
-      case 1: //ERROR
-      case MYSQL_NO_DATA: //NO MORE DATA
-      default: mysql_stmt_free_result(mysql_stmt);
-        goto sqlerr;
+    case 0: // SUCCESS
+      break;
+    case 1:             // ERROR
+    case MYSQL_NO_DATA: // NO MORE DATA
+    default:
+      mysql_stmt_free_result(mysql_stmt);
+      goto sqlerr;
     }
     mysql_stmt_free_result(mysql_stmt);
 
-    pick_dist_info(ol_dist_info, d_id);    /* pick correct
-							 * s_dist_xx */
+    pick_dist_info(ol_dist_info, d_id); /* pick correct
+                                         * s_dist_xx */
 
     stock[ol_num_seq[ol_number - 1]] = s_quantity;
 
@@ -417,7 +446,7 @@ int neword(int t_num,
       s_quantity = s_quantity - ol_quantity + 91;
 
 #ifdef DEBUG
-    printf("n %d\n",proceed);
+    printf("n %d\n", proceed);
 #endif
 
     proceed = 8;
@@ -433,15 +462,17 @@ int neword(int t_num,
     param[1].buffer = &ol_i_id;
     param[2].buffer_type = MYSQL_TYPE_LONG;
     param[2].buffer = &ol_supply_w_id;
-    if (mysql_stmt_bind_param(mysql_stmt, param)) goto sqlerr;
-    if (mysql_stmt_execute(mysql_stmt)) goto sqlerr;
+    if (mysql_stmt_bind_param(mysql_stmt, param))
+      goto sqlerr;
+    if (mysql_stmt_execute(mysql_stmt))
+      goto sqlerr;
 
     ol_amount = ol_quantity * i_price * (1 + w_tax + d_tax) * (1 - c_discount);
     amt[ol_num_seq[ol_number - 1]] = ol_amount;
     total += ol_amount;
 
 #ifdef DEBUG
-    printf("n %d\n",proceed);
+    printf("n %d\n", proceed);
 #endif
 
     proceed = 9;
@@ -474,10 +505,12 @@ int neword(int t_num,
     param[8].buffer_type = MYSQL_TYPE_STRING;
     param[8].buffer = ol_dist_info;
     param[8].buffer_length = strlen(ol_dist_info);
-    if (mysql_stmt_bind_param(mysql_stmt, param)) goto sqlerr;
-    if (mysql_stmt_execute(mysql_stmt)) goto sqlerr;
+    if (mysql_stmt_bind_param(mysql_stmt, param))
+      goto sqlerr;
+    if (mysql_stmt_execute(mysql_stmt))
+      goto sqlerr;
 
-  }            /* End Order Lines */
+  } /* End Order Lines */
 
 #ifdef DEBUG
   printf("insert 3\n");
@@ -485,29 +518,29 @@ int neword(int t_num,
 #endif
 
   /*EXEC_SQL COMMIT WORK;*/
-  if (mysql_commit(ctx[t_num])) goto sqlerr;
+  if (mysql_commit(ctx[t_num]))
+    goto sqlerr;
   clk1 = clock_gettime(CLOCK_REALTIME, &tbuf1);
   if (ftrx_file) {
-    fprintf(ftrx_file, "t_num: %d finish: %lu %lu start: %lu %lu\n", t_num, tbuf1.tv_sec, tbuf1.tv_nsec,
-            tbuf_start.tv_sec, tbuf_start.tv_nsec);
+    fprintf(ftrx_file, "t_num: %d finish: %lu %lu start: %lu %lu\n", t_num,
+            tbuf1.tv_sec, tbuf1.tv_nsec, tbuf_start.tv_sec, tbuf_start.tv_nsec);
   }
 
   return (1);
 
-  invaliditem:
+invaliditem:
   /*EXEC_SQL ROLLBACK WORK;*/
   mysql_rollback(ctx[t_num]);
 
   /* printf("Item number is not valid\n"); */
   return (1); /* OK? */
 
-  sqlerr:
+sqlerr:
   fprintf(stderr, "neword %d:%d\n", t_num, proceed);
   error(ctx[t_num], mysql_stmt);
   /*EXEC SQL WHENEVER SQLERROR GOTO sqlerrerr;*/
   /*EXEC_SQL ROLLBACK WORK;*/
   mysql_rollback(ctx[t_num]);
-  sqlerrerr:
+sqlerrerr:
   return (0);
 }
-

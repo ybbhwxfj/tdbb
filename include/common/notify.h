@@ -1,15 +1,15 @@
 #pragma once
-#include <mutex>
 #include <condition_variable>
+#include <mutex>
 
 class notify {
- private:
+private:
   std::mutex cond_mutex_;
   std::condition_variable cond_var_;
   bool done_;
- public:
-  notify() : done_(false) {
-  }
+
+public:
+  notify() : done_(false) {}
 
   void wait() {
     std::unique_lock l(cond_mutex_);

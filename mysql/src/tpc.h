@@ -10,15 +10,15 @@ extern "C" {
 /*
  * correct values
  */
-#define MAXITEMS      max_items
+#define MAXITEMS max_items
 #define CUST_PER_DIST cust_per_dist
 #define DIST_PER_WARE dist_per_ware
-#define ORD_PER_DIST  ord_per_dist
+#define ORD_PER_DIST ord_per_dist
 
 /*
  */
 
-/* 
+/*
  * small values
 
 #define MAXITEMS 	1000
@@ -30,7 +30,7 @@ extern "C" {
 
 /* definitions for new order transaction */
 #define MAX_NUM_ITEMS max_num_items
-#define MAX_ITEM_LEN  max_item_len
+#define MAX_ITEM_LEN max_item_len
 
 #define swap_int(a, b) {int tmp; tmp=a; a=b; b=tmp;}
 
@@ -38,33 +38,33 @@ extern "C" {
  * hack MakeAddress() into a macro so that we can pass Oracle
  * VARCHARs instead of char *s
  */
-#define MakeAddressMacro(str1, str2, city, state, zip) \
+#define MakeAddressMacro(str1, str2, city, state, zip)                         \
 {int tmp; \
- tmp = MakeAlphaString(10,20,str1.arr); \
- str1.len = tmp; \
- tmp = MakeAlphaString(10,20,str2.arr); \
- str2.len = tmp; \
- tmp = MakeAlphaString(10,20,city.arr); \
- city.len = tmp; \
- tmp = MakeAlphaString(2,2,state.arr); \
- state.len = tmp; \
- tmp = MakeNumberString(9,9,zip.arr); \
+    tmp = MakeAlphaString(10, 20, str1.arr);                                   \
+    str1.len = tmp;                                                            \
+    tmp = MakeAlphaString(10, 20, str2.arr);                                   \
+    str2.len = tmp;                                                            \
+    tmp = MakeAlphaString(10, 20, city.arr);                                   \
+    city.len = tmp;                                                            \
+    tmp = MakeAlphaString(2, 2, state.arr);                                    \
+    state.len = tmp;                                                           \
+    tmp = MakeNumberString(9, 9, zip.arr);                                     \
  zip.len = tmp;}
 
 /*
  * while we're at it, wrap MakeAlphaString() and MakeNumberString()
  * in a similar way
  */
-#define MakeAlphaStringMacro(x, y, str) \
+#define MakeAlphaStringMacro(x, y, str)                                        \
 {int tmp; tmp = MakeAlphaString(x,y,str.arr); str.len = tmp;}
-#define MakeNumberStringMacro(x, y, str) \
+#define MakeNumberStringMacro(x, y, str)                                       \
 {int tmp; tmp = MakeNumberString(x,y,str.arr); str.len = tmp;}
 
 /*
  * likewise, for Lastname()
  * counts on Lastname() producing null-terminated strings
  */
-#define LastnameMacro(num, str) \
+#define LastnameMacro(num, str)                                                \
 {Lastname(num, str.arr); str.len = strlen(str.arr);}
 
 extern long count_ware;

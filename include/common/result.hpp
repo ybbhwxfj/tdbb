@@ -1,7 +1,7 @@
 #pragma once
 
-#include "common/error_code.h"
 #include "common/berror.h"
+#include "common/error_code.h"
 #include <boost/outcome.hpp>
 #include <boost/outcome/config.hpp>
 #include <boost/outcome/std_result.hpp>

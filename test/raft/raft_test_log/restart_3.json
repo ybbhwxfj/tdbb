@@ -6,162 +6,52 @@
     {
       "term": "11",
       "index": "1",
-      "xlog": [
-        {
-          "logType": "TX_CMD_RM_COMMIT",
-          "xid": "1001",
-          "index": "1"
-        },
-        {
-          "logType": "TX_CMD_RM_COMMIT",
-          "xid": "1002",
-          "index": "1"
-        }
-      ]
+      "repeated_tx_logs": ""
     },
     {
       "term": "11",
       "index": "2",
-      "xlog": [
-        {
-          "logType": "TX_CMD_RM_COMMIT",
-          "xid": "2001",
-          "index": "2"
-        },
-        {
-          "logType": "TX_CMD_RM_COMMIT",
-          "xid": "2002",
-          "index": "2"
-        }
-      ]
+      "repeated_tx_logs": ""
     },
     {
       "term": "11",
       "index": "3",
-      "xlog": [
-        {
-          "logType": "TX_CMD_RM_COMMIT",
-          "xid": "3001",
-          "index": "3"
-        },
-        {
-          "logType": "TX_CMD_RM_COMMIT",
-          "xid": "3002",
-          "index": "3"
-        }
-      ]
+      "repeated_tx_logs": ""
     },
     {
       "term": "11",
       "index": "4",
-      "xlog": [
-        {
-          "logType": "TX_CMD_RM_COMMIT",
-          "xid": "4001",
-          "index": "4"
-        },
-        {
-          "logType": "TX_CMD_RM_COMMIT",
-          "xid": "4002",
-          "index": "4"
-        }
-      ]
+      "repeated_tx_logs": ""
     },
     {
       "term": "11",
       "index": "5",
-      "xlog": [
-        {
-          "logType": "TX_CMD_RM_COMMIT",
-          "xid": "5001",
-          "index": "5"
-        },
-        {
-          "logType": "TX_CMD_RM_COMMIT",
-          "xid": "5002",
-          "index": "5"
-        }
-      ]
+      "repeated_tx_logs": ""
     },
     {
       "term": "11",
       "index": "6",
-      "xlog": [
-        {
-          "logType": "TX_CMD_RM_COMMIT",
-          "xid": "6001",
-          "index": "6"
-        },
-        {
-          "logType": "TX_CMD_RM_COMMIT",
-          "xid": "6002",
-          "index": "6"
-        }
-      ]
+      "repeated_tx_logs": ""
     },
     {
       "term": "11",
       "index": "7",
-      "xlog": [
-        {
-          "logType": "TX_CMD_RM_COMMIT",
-          "xid": "7001",
-          "index": "7"
-        },
-        {
-          "logType": "TX_CMD_RM_COMMIT",
-          "xid": "7002",
-          "index": "7"
-        }
-      ]
+      "repeated_tx_logs": ""
     },
     {
       "term": "11",
       "index": "8",
-      "xlog": [
-        {
-          "logType": "TX_CMD_RM_COMMIT",
-          "xid": "8001",
-          "index": "8"
-        },
-        {
-          "logType": "TX_CMD_RM_COMMIT",
-          "xid": "8002",
-          "index": "8"
-        }
-      ]
+      "repeated_tx_logs": ""
     },
     {
       "term": "11",
       "index": "9",
-      "xlog": [
-        {
-          "logType": "TX_CMD_RM_COMMIT",
-          "xid": "9001",
-          "index": "9"
-        },
-        {
-          "logType": "TX_CMD_RM_COMMIT",
-          "xid": "9002",
-          "index": "9"
-        }
-      ]
+      "repeated_tx_logs": ""
     },
     {
       "term": "11",
       "index": "10",
-      "xlog": [
-        {
-          "logType": "TX_CMD_RM_COMMIT",
-          "xid": "10001",
-          "index": "10"
-        },
-        {
-          "logType": "TX_CMD_RM_COMMIT",
-          "xid": "10002",
-          "index": "10"
-        }
-      ]
+      "repeated_tx_logs": "20220926"
     }
   ]
 }

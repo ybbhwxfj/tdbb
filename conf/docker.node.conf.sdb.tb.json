@@ -1,0 +1,60 @@
+{
+  "node_server_list": [
+    {
+      "zone_name": "az1",
+      "shard_name": ["s1"],
+      "node_name": "bdb-s1-az1-all",
+      "address": "192.168.1.1",
+      "private_address": "192.168.1.1",
+      "port": 8000,
+      "repl_port": 7000,
+      "block_type": [
+        "CCB",
+        "RLB",
+        "DSB"
+      ]
+    },
+    {
+      "zone_name": "az2",
+      "shard_name": ["s1"],
+      "node_name": "bdb-s1-az2-all",
+      "address": "192.168.2.1",
+      "private_address": "192.168.2.1",
+      "port": 8000,
+      "repl_port": 7000,
+      "block_type": [
+        "CCB",
+        "RLB",
+        "DSB"
+      ]
+    },
+    {
+      "zone_name": "az3",
+      "shard_name": ["s1"],
+      "node_name": "bdb-s1-az3-all",
+      "address": "192.168.3.1",
+      "private_address": "192.168.3.1",
+      "port": 8000,
+      "repl_port": 7000,
+      "block_type": [
+        "CCB",
+        "RLB",
+        "DSB"
+      ]
+    }
+  ],
+  "node_client_list": [
+    {
+      "zone_name": "az3",
+      "shard_name": ["s0"],
+      "node_name": "bdb-client-az3",
+      "address": "192.168.3.100",
+      "private_address": "192.168.3.100",
+      "port": 8000,
+      "repl_port": 7000,
+      "block_type": [
+        "CLIENT"
+      ]
+    }
+  ]
+}

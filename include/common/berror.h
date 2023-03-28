@@ -1,13 +1,13 @@
 #pragma once
 
 #include "common/error_code.h"
-#include <system_error>
 #include <boost/assert.hpp>
 #include <boost/outcome.hpp>
+#include <system_error>
 
 inline std::string ec2string(EC ec) {
   auto i = enum_strings<EC>::enum2str.find(ec);
-  if (i == enum_strings<EC>::enum2str.end()) {
+  if (i==enum_strings<EC>::enum2str.end()) {
     return "";
   }
   return i->second;
@@ -16,14 +16,12 @@ inline std::string ec2string(EC ec) {
 namespace std {
 // Tell the C++ 11 STL metaprogramming that enum ec
 // is registered with the standard error code system
-template<>
-struct is_error_code_enum<EC> : true_type {
-};
+template<> struct is_error_code_enum<EC> : true_type {};
 
 namespace detail {
 // Define a custom error code category derived from std::error_category
 class ec_category : public std::error_category {
- public:
+public:
   // Return a short descriptive name for the category
   virtual const char *name() const noexcept override final {
     return "ConversionError";
@@ -38,20 +36,16 @@ class ec_category : public std::error_category {
   virtual std::error_condition
   default_error_condition(int c) const noexcept override final {
     switch (static_cast<EC>(c)) {
-      case EC::EC_NETWORK_ERROR:return make_error_condition(std::errc::invalid_argument);
-      default:
-        // I have no mapping for this code
-        return std::error_condition(c, *this);
+    case EC::EC_NETWORK_ERROR:return make_error_condition(std::errc::invalid_argument);
+    default:
+      // I have no mapping for this code
+      return std::error_condition(c, *this);
     }
   }
 };
 } // namespace detail
 
-
 } // namespace std
-
-
-
 
 // Define the linkage for this function to be used by external code.
 // This would be the usual __declspec(dllexport) or __declspec(dllimport)
@@ -72,7 +66,7 @@ inline std::error_code make_error_code(EC e) {
 }
 
 class berror : public std::error_code {
- public:
+public:
   explicit berror() : std::error_code() {}
 
   explicit berror(EC ec)
@@ -80,19 +74,17 @@ class berror : public std::error_code {
 
   };
 
-  explicit berror(boost::system::error_code bec) :
-      std::error_code(bec.value(), bec.category()) {
-
-  }
+  explicit berror(boost::system::error_code bec)
+      : std::error_code(bec.value(), bec.category()) {}
 
   explicit berror(std::error_code sec)
       : std::error_code(sec) {
 
   };
 
-  bool operator==(const berror &err) { return this->value() == err.value(); }
+  bool operator==(const berror &err) { return this->value()==err.value(); }
 
-  bool operator==(EC ec) const { return this->code() == ec; }
+  bool operator==(EC ec) const { return this->code()==ec; }
 
   EC code() const { return EC(value()); }
 
@@ -105,5 +97,5 @@ class berror : public std::error_code {
     }
   }
 
-  bool failed() const { return value() != 0; }
+  bool failed() const { return value()!=0; }
 };

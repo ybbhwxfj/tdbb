@@ -2,6 +2,13 @@ syntax = "proto3";
 
 import "datum.proto";
 
+message tuple_key {
+  uint64 table_id = 1;
+  uint64 shard_id = 2;
+  uint64 tuple_id = 3;
+}
+
+
 message tuple {
   repeated datum item = 1;
 }

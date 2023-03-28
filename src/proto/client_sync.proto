@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+message client_sync {
+  uint32 source_id = 1;
+  uint32 dest_id = 2;
+  string name = 3;
+  bytes payload = 4;
+}
+
+message client_bench_stop {
+  uint32 source_id = 1;
+  uint32 dest_id = 2;
+}

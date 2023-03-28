@@ -1,17 +1,18 @@
 #pragma once
 
 #include "common/data_type.h"
-#include <boost/json.hpp>
 #include "common/id.h"
+#include <boost/json.hpp>
 
 class column_desc {
- private:
+private:
   dt type_;
   uint32_t length_;
   std::string name_;
   std::string default_value_;
   column_id_t id_;
- public:
+
+public:
   column_desc() : type_(dt::DT_INT32), length_(0), id_(0) {}
 
   void from_json(boost::json::object &json);

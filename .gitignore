@@ -1,12 +1,12 @@
 bin
 lib
 build
-cmake-build-debug
+cmake-build-debug*
 py/test
 py/result
 py/result*.txt
 py/plot_*.pdf
-
+py/az*.txt
 third_party/bin
 third_party/include
 third_party/lib

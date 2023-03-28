@@ -31,11 +31,16 @@ apt-get update && \
     iputils-ping \
     iproute2 \
     rsync \
-    gdb
+    gdb \
+    mysql-server-8.0 \
+    cloc \
+    unifdef
+
 
 
 pip3 install \
-    paramiko
+    paramiko \
+    tcconfig
 
 echo 'Asia/Shanghai' > /etc/timezone
 
@@ -66,12 +71,12 @@ echo "PATH=${PATH}:/home/mysql/block-db/bin" > /etc/profile
 
 
 # set rsa key
-ssh-keygen -q -t rsa -N '' -f ~/.ssh/id_rsa
-cat ~/.ssh/id_rsa.pub > ~/.ssh/authorized_keys
+# ssh-keygen -q -t rsa -N '' -f ~/.ssh/id_rsa
+# cat ~/.ssh/id_rsa.pub > ~/.ssh/authorized_keys
 
 # build third party library
 
 
-bash "${project_directory}/script/build_ssl.sh"
-bash "${project_directory}/script/build_mysql.sh"
+# bash "${project_directory}/script/build_ssl.sh"
+# bash "${project_directory}/script/build_mysql.sh"
 bash "${project_directory}/script/build_third_party.sh" -i /usr
