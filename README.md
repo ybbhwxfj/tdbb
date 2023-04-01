@@ -1,6 +1,6 @@
 # BlockDB
 
-This repo is the source code of our research paper *A Composable Architecture for Cloud Transactional DBMS*(To appear).
+This repo is the source code of our research paper *A Composable Architecture for Cloud Transactional DBMS*.
 This paper aims to simplify cloud transactional DBMS development.
 
 [Architecture](doc/figures/blocks.pdf)
