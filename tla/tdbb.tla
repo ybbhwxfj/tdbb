@@ -570,9 +570,7 @@ CCBHandleReportToCCB(i) ==
     /\ pc' = [pc EXCEPT ![i] = [state |-> PC_IDLE]]
     /\ UNCHANGED <<
             aux_vars,
-            ccb_tx,
             ccb_cno,
-
             ccb_tuple,
             ccb_last_csn,
             rlb_vars,
@@ -946,15 +944,21 @@ CCBHandleRegisterCCBResponse(i) ==
     /\ LET message == pc[i].message
             success == message.success
             uncommitted == message.uncommitted 
+            cno == message.cno
        IN IF success THEN
-             schedule' = _ScheduleAbort(schedule, uncommitted)
+             /\ schedule' = _ScheduleAbort(schedule, uncommitted)
+             /\ ccb_cno' = [ccb_cno EXCEPT ![i] = cno]
           ELSE
-            UNCHANGED <<schedule>>
+            UNCHANGED <<ccb_cno, schedule>>
     /\ pc' = [pc EXCEPT ![i] = [state |-> PC_IDLE]]
+    /\ UNCHANGED <<
+            ccb_tx,
+            ccb_tuple,
+            ccb_last_csn
+            >>
     /\ UNCHANGED <<
             history,
             position,
-            ccb_vars,
             rlb_vars,
             dsb_vars 
             >>
