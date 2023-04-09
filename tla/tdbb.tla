@@ -109,7 +109,7 @@ BLOCK_COMBINATION == {
             ccb : NODE_CCB,
             rlb : NODE_RLB,
             dsb : NODE_DSB,
-            keys : KEY
+            keys : SUBSET KEY
         ]  
     : /\ KEY \cap NODE = {}
       /\ Cardinality(COMBINATION) > 0
@@ -117,7 +117,7 @@ BLOCK_COMBINATION == {
             /\ c.ccb \in s
             /\ c.rlb \in s
             /\ c.dsb \in s
-            /\ c.keys \in s
+            /\ c.keys = s \ {c.ccb, c.rlb, c.dsb}
             /\ ~(\E r \in COMBINATION:
                     /\ r # s
                     /\ r.keys \cap s.keys # {}
@@ -126,8 +126,13 @@ BLOCK_COMBINATION == {
 
 
 NodeIdOfKey(_key, _block) ==
-    LET c == CHOOSE c \in BLOCK_COMBINATION: _key \in c.keys
-    IN c[_block]
+    LET ids == {
+                    id \in NODE:
+                        \E c \in BLOCK_COMBINATION: 
+                            /\ _key \in c.keys
+                            /\ c[_block] = id
+       }
+    IN ids
 
 NodeIdOfBlock(_in_id, _input_block, _ouput_block) ==
     LET ids == { 
@@ -257,22 +262,26 @@ IsWriteLog(_log) ==
 _IsReadWriteOp(_op) ==
     _op.otype \in READ_WRITE_OP_SET
     
-SelectLogOp(_op_sequence) ==
+_SelectLogOp(_op_sequence) ==
     SelectSeq(_op_sequence, IsLogOp)
 
-SelectEndLog(_log) ==
+_SelectEndLog(_log) ==
     SelectSeq(_log, IsEndLog)
 
-SelectWriteLog(_log, _is_committed) ==
+_SelectWriteLog(_log, _is_committed, _xids) ==
     LET F[i \in 0..Len(_log)] == 
-            IF i = 0 THEN 
+            IF i = 0 \/ _xids = {} THEN 
                 << >>
-            ELSE IF /\ IsWriteLog(_log[i]) 
+            ELSE IF /\ _log[i].xid \in _xids
+                    /\ IsWriteLog(_log[i]) 
                     /\(\/ (/\ _is_committed 
-                            /\ \E ci \in i..Len(_log) : _log[ci].otype = OP_COMMIT
+                            /\ \E ci \in i..Len(_log) : 
+                                _log[ci].otype = OP_COMMIT
                            )
                        \/ (/\ ~_is_committed 
-                            /\ ~(\E ci \in i..Len(_log) : _log[ci].otype = OP_COMMIT)
+                            /\ ~(\E ci \in i..Len(_log) : 
+                                    _log[ci].otype = OP_COMMIT
+                                )
                            )
                        )
                 THEN 
@@ -280,11 +289,14 @@ SelectWriteLog(_log, _is_committed) ==
             ELSE F[i-1]
     IN F[Len(_log)]
 
+_SelectCommittedWriteOfTx(_log, _xids) ==
+    _SelectWriteLog(_log, TRUE, _xids)
+    
 _SelectCommittedWrite(_log) ==
-    SelectWriteLog(_log, TRUE)
+    _SelectWriteLog(_log, TRUE, XID)
     
 _SelectUncommittedWrite(_log) ==
-    SelectWriteLog(_log, TRUE)
+    _SelectWriteLog(_log, TRUE, XID)
     
 OpSeq2LogSeq(_lsn, _csn, _op_seq) ==
      [
@@ -404,6 +416,55 @@ _RegisterIds(_cno_info_set) ==
 _RegisterOK(_cno_info_set, _set, _cno) ==
     /\ _RegisterCNOEqual(_cno_info_set, _cno)
     /\ _RegisterIds(_cno_info_set) = _set
+
+SelectKeyOfLogSeq(_log, _k) == 
+    LET F[i \in 0..Len(_log)] == 
+            IF i = 0 THEN 
+                << >>
+            ELSE IF /\ _log[i].key = _k  
+                THEN 
+                    Append(F[i-1], _log[i])
+            ELSE F[i-1]
+    IN F[Len(_log)]
+
+RECURSIVE _UpdateNewVersion(_, _, _)
+_UpdateNewVersion(_versions, _ver_append, _log_seq) ==
+    IF Len(_log_seq) = 0 THEN
+        _ver_append
+    ELSE 
+        LET v == _versions \o _ver_append
+            l == _log_seq[1]
+            a == _NewTupleVersion(v, l.xid, l.csn)
+        IN _UpdateNewVersion(v, a, SubSeq(_log_seq, 2, Len(_log_seq)))
+    
+_ReplayLog2(_tuple_c, _log) ==
+    [
+        key \in KEY |-> 
+            LET ls == SelectKeyOfLogSeq(_log, key)
+            IN 
+            IF Len(ls) > 0 THEN
+                LET versions == _tuple_c[key]
+                    append == _UpdateNewVersion(versions, <<>> , ls)
+                IN 
+                    _tuple_c[key] \o append
+            ELSE 
+                _tuple_c[key]
+    ]
+        
+_ReplayLog3(_tuple_c, _tuple, _log) ==
+    [
+        key \in KEY |-> 
+            LET ls == SelectKeyOfLogSeq(_log, key)
+            IN 
+            IF Len(ls) > 0 THEN
+                LET versions == _tuple[key] \o _tuple_c[key]
+                    append == _UpdateNewVersion(versions, <<>> , ls)
+                IN 
+                    _tuple_c[key] \o append
+            ELSE 
+                _tuple_c[key]
+    ]
+
               
 LogEntryAppend(_log, _op_seq) ==
     LET end_tx_log_index == {i \in 1..Len(_log) : _log[i].otype \in END_OP_SET}
@@ -432,7 +493,7 @@ CCBAppendLog(i) ==
            to_append_s == SubSeq(schedule, position + 1, Len(schedule))
        IN (/\ ccb_cno[i] = rlb_cno[rlb_id]
            /\ position' = Len(schedule)
-           /\ LET message == AppendLogMessage(ccb_cno[i], SelectLogOp(to_append_s))
+           /\ LET message == AppendLogMessage(ccb_cno[i], _SelectLogOp(to_append_s))
                 IN pc' = [pc EXCEPT ![i] = [state |-> "HandleAppendLogRequest", message |-> message]]
           )
    /\ UNCHANGED <<
@@ -543,7 +604,7 @@ RLBReportToCCB(i) ==
         /\
             LET commit_index == rlb_commit_lsn[i]
                 commit_prefix_seq == SubSeq(rlb_log[i], 1, commit_index)
-                end_log_seq == SelectEndLog(commit_prefix_seq)
+                end_log_seq == _SelectEndLog(commit_prefix_seq)
                 message == ReportMessage(rlb_cno[i], rlb_last_csn[i], end_log_seq)
             IN 
                /\ pc' = [pc EXCEPT ![i] = [state |-> "HandleReportToCCB", message |-> message]]
@@ -560,18 +621,29 @@ CCBHandleReportToCCB(i) ==
     /\ LET message == pc[i].message
             cno == message.cno
             entries ==  message.entries
-            last_csn == message.last_csn
+            last_csn == IF ccb_last_csn[i] < message.last_csn THEN 
+                            message.last_csn 
+                        ELSE
+                            ccb_last_csn[i]
             end_log_set == { entries[j] : j \in DOMAIN entries}
+            committed == {x \in XID : 
+                            \E j \in 1..Len(entries) :
+                                /\ x = entries[j].xid
+                                /\ entries[j].otype = OP_COMMIT
+                         } 
        IN IF ccb_cno[i] = cno THEN
             /\ ccb_tx' = [ccb_tx EXCEPT ![i] = CCBUpdateTxState(ccb_tx[i], end_log_set) ]
             /\ ccb_last_csn' = [ccb_last_csn EXCEPT ![i] = last_csn]
+            /\ LET rlb_node == CHOOSE _n \in NodeIdOfBlock(i, BLOCK_CCB, BLOCK_RLB) : TRUE
+                   write_log == _SelectCommittedWriteOfTx(rlb_log[i], committed) 
+                   tuple_set == _ReplayLog2(ccb_tuple[i], write_log)
+               IN  ccb_tuple' = [ccb_tuple EXCEPT ![i] = tuple_set]
           ELSE
             UNCHANGED <<ccb_tx, ccb_last_csn>>
     /\ pc' = [pc EXCEPT ![i] = [state |-> PC_IDLE]]
     /\ UNCHANGED <<
             aux_vars,
             ccb_cno,
-            ccb_tuple,
             ccb_last_csn,
             rlb_vars,
             dsb_vars
@@ -599,7 +671,7 @@ CCBRead(i, _xid, _key) ==
                 /\ LET message == ReadMessage(_xid, ccb_cno[i], _key)
                        dsb_node == CHOOSE _n \in NodeIdOfKey(_key, BLOCK_DSB): TRUE
                    IN pc' = [
-                            pc EXCEPT  ![i] = 
+                            pc EXCEPT  ![dsb_node] = 
                                 [
                                     state |-> "HandleReadFromDSBRequest", 
                                     message |-> message
@@ -724,40 +796,7 @@ RLBReplayToDSB(i) ==
             dsb_vars
         >>
 
-SelectKeyOfLogSeq(_log, _k) == 
-    LET F[i \in 0..Len(_log)] == 
-            IF i = 0 THEN 
-                << >>
-            ELSE IF /\ _log[i].key = _k  
-                THEN 
-                    Append(F[i-1], _log[i])
-            ELSE F[i-1]
-    IN F[Len(_log)]
 
-RECURSIVE _UpdateNewVersion(_, _, _)
-_UpdateNewVersion(_versions, _ver_append, _log_seq) ==
-    IF Len(_log_seq) = 0 THEN
-        _ver_append
-    ELSE 
-        LET v == _versions \o _ver_append
-            l == _log_seq[1]
-            a == _NewTupleVersion(v, l.xid, l.csn)
-        IN _UpdateNewVersion(v, a, SubSeq(_log_seq, 2, Len(_log_seq)))
-    
-
-_ReplayLog(_tuple_c, _tuple, _log) ==
-    [
-        key \in KEY |-> 
-            LET ls == SelectKeyOfLogSeq(_log, key)
-            IN 
-            IF Len(ls) > 0 THEN
-                LET versions == _tuple[key] \o _tuple_c[key]
-                    append == _UpdateNewVersion(versions, <<>> , ls)
-                IN 
-                    _tuple_c[key] \o append
-            ELSE 
-                _tuple_c[key]
-    ]
 
 DSBHandleReplayToDSBRequest(i) ==
     /\ pc[i].state = "HandleReplayToDSBRequest"
@@ -767,7 +806,7 @@ DSBHandleReplayToDSBRequest(i) ==
             entries == message.entries
 
         IN 
-            LET new_tuple_cache == _ReplayLog(dsb_tuple_cache[i], dsb_tuple[i], entries)
+            LET new_tuple_cache == _ReplayLog3(dsb_tuple_cache[i], dsb_tuple[i], entries)
             IN
             IF cno = dsb_cno[i] THEN 
                 UNCHANGED  <<pc>>
@@ -1058,7 +1097,7 @@ DSBHandleRegisterDSBResponse(i) ==
             /\ dsb_cno' = [dsb_cno EXCEPT ![i] = cno]
             /\ UNCHANGED <<dsb_tuple_cache>>
           ELSE
-            /\ LET tuple_cache == _ReplayLog(dsb_tuple_cache[i], dsb_tuple[i], entries)
+            /\ LET tuple_cache == _ReplayLog3(dsb_tuple_cache[i], dsb_tuple[i], entries)
                IN dsb_tuple_cache' = [dsb_tuple_cache EXCEPT ![i] = tuple_cache]
             /\ UNCHANGED <<dsb_cno>>
     /\ pc' = [pc EXCEPT ![i] = [state |-> PC_IDLE]]
