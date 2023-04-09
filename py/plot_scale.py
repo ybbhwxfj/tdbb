@@ -1,6 +1,15 @@
 import matplotlib.pyplot as plt
 import matplotlib.backends.backend_pdf as pdf
 from utils import util
+import matplotlib.pylab as pylab
+
+fontsize = 20
+params = {'legend.fontsize': 'x-large',
+          'axes.labelsize': 'x-large',
+          'axes.titlesize':'x-large',
+          'xtick.labelsize':'x-large',
+          'ytick.labelsize':'x-large'}
+pylab.rcParams.update(params)
 
 result1 = util.json_attr_values(file='scale/scale_remote_low.json', attr_names=['tpm'])
 tpm_r_l = result1['tpm']
@@ -15,7 +24,7 @@ tpm2 = [
             # high level remote access
             tpm_r_h
         ]
-name = ['g7.2x', 'g7.4x', 'g7.8x', 'g7.2x*2', 'g7.2x*4', 'g7.2x*8']
+name = ['2x', '4x', '8x', '2x*2', '2x*4', '2x*8']
 
 low_or_high = ['remote_low', 'remote_high']
 
@@ -35,12 +44,12 @@ for j in range(len(tpm2)):
            hatch=hatch,
            # use alpha=.99 to render hatches when exporting in PDF to avoid bugs
            alpha=.99)
-    ax.set_ylabel('TPM')
-    ax.set_title('setting')
-    ax.legend(title='scale up or scale out')
+    ax.set_ylabel('TPM', size=fontsize)
+    ax.set_xlabel('scale up/out setting', size=fontsize)
+    ax.legend()
 
     pp = pdf.PdfPages("fig_scale_tpm_{}.pdf".format(dist))
-    pp.savefig(fig, bbox_inches='tight')
+    pp.savefig(fig, bbox_inches='tight', pad_inches=0)
     pp.close()
     ax.clear()
     plt.clf()
@@ -56,10 +65,10 @@ for j in range(len(tpm2)):
            hatch=hatch,
            alpha=.99
            )
-    ax.set_ylabel('price/TPM')
-    ax.set_title('setting')
-    ax.legend(title='scale up or scale out')
+    ax.set_ylabel('price/TPM', size=fontsize)
+    ax.set_xlabel('scale up/out setting', size=fontsize)
+    ax.legend()
     pp = pdf.PdfPages("fig_scale_price_per_tpm_{}.pdf".format(dist))
-    pp.savefig(fig, bbox_inches='tight')
+    pp.savefig(fig, bbox_inches='tight', pad_inches=0)
     pp.close()
     plt.clf()
