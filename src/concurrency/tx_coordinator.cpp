@@ -29,7 +29,7 @@ tx_coordinator::tx_coordinator(
     : tx_base(s, xid), xid_(xid), node_id_(node_id), node_name_(id_2_name(node_id)),
       lead_node_(std::move(lead_node)), service_(service),
       connection_(std::move(connection)), wal_(write_ahead_log),
-      tm_state_(TM_IDLE), write_commit_log_(false), write_abort_log_(false),
+      tm_state_(TM_IDLE), write_begin_log_(false), write_commit_log_(false), write_abort_log_(false),
       error_code_(EC::EC_OK), victim_(false), responsed_(false),
       fn_tm_state_(std::move(fn)), latency_read_(0), latency_read_dsb_(0),
       latency_replicate_(0), latency_append_(0), latency_lock_wait_(0),
@@ -53,7 +53,21 @@ void tx_coordinator::on_log_entry_commit(tx_cmd_type type) {
     on_ended();
     break;
   }
+  case TX_CMD_TM_BEGIN: {
+    on_begin();
+  }
   default:break;
+  }
+}
+
+void tx_coordinator::on_begin() {
+#ifdef TX_TRACE
+  trace_message_ += "B;";
+#endif
+  auto _r = send_rm_request();
+  if (!_r) {
+    error_code_ = EC_TX_ABORT;
+    send_tx_response();
   }
 }
 
@@ -63,7 +77,6 @@ void tx_coordinator::on_committed() {
 #endif
   tm_state_ = TM_COMMITTED;
   send_commit();
-  send_tx_response();
 }
 
 void tx_coordinator::on_aborted() {
@@ -120,6 +133,11 @@ result<void> tx_coordinator::handle_tx_request(const tx_request &req) {
     }
   }
 
+  write_begin_log();
+  return outcome::success();
+}
+
+result<void> tx_coordinator::send_rm_request() {
   for (auto &iter : rm_tracer_) {
     iter.second.message_.set_xid(xid_);
     iter.second.message_.set_client_request(false);
@@ -298,6 +316,7 @@ void tx_coordinator::step_tm_state_advance() {
   if (idle == 0) {
     if (committed == total || aborted == total) {
       //send_end();
+      send_tx_response();
       write_end_log();
     } else if (prepare_commit + prepare_abort == total) {
       if (prepare_abort == 0) {
@@ -306,6 +325,22 @@ void tx_coordinator::step_tm_state_advance() {
         write_abort_log();
       }
     }
+  }
+}
+
+void tx_coordinator::write_begin_log() {
+  // append prepare commit log
+  if (tm_state_ == TM_IDLE  && !write_begin_log_) {
+    tx_log_proto log;
+    log.set_log_type(TX_CMD_TM_BEGIN);
+    log.set_xid(xid_);
+    auto s = shared_from_this();
+#ifdef TX_TRACE
+    trace_message_ += "B log;";
+#endif
+    tx_log_binary log_binary = tx_log_proto_to_binary(log);
+    wal_->async_append(log_binary);
+    write_begin_log_ = true;
   }
 }
 
