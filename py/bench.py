@@ -51,7 +51,7 @@ AZ_RTT_LATENCY_MS = 40
 DEADLOCK_DETECTION = False
 DEADLOCK_DETECTION_MS = 1000
 LOCK_TIMEOUT_MS = 500
-CALVIN_EPOCH_MS = 20
+CALVIN_EPOCH_MS = 40
 NUM_OUTPUT_RESULT = 80
 
 NODE_MYSQL_CONF = 'node.mysql.conf.json'
@@ -632,13 +632,14 @@ def evaluation_ratio_read_only_tx(
         array_num_warehouse=None,
         array_num_terminal=None,
         control_percent_dist_tx=DIST_PERCENTAGE,
+        percent_read_only=PERCENT_READ_ONLY,
 ):
     if array_num_warehouse is None:
         array_num_warehouse = WAREHOUSES
     if array_num_terminal is None:
         array_num_terminal = [DEFAULT_NUM_TERMINAL]
     for db_type in db_types:
-        for read_only in PERCENT_READ_ONLY:
+        for read_only in percent_read_only:
             for num_warehouse in array_num_warehouse:
                 for term in array_num_terminal:
                     clean_all(conf_path)
@@ -1313,20 +1314,24 @@ def main():
 
     if db_config_type == DB_CONFIG_STB:
         if test_parameter == TEST_CACHE:
+            arr_percent_ccb_cache = [0.0, 0.25, 0.5, 0.75, 1.0]
             evaluation_block_binding(
                 conf,
                 tight_binding=True,
-                cached_percentage_array=CCB_CACHED_PERCENTAGE_ARRAY)
+                cached_percentage_array=arr_percent_ccb_cache)
         elif test_parameter == TEST_TERMINAL:
+            arr_num_terminal = [160]
             evaluation_block_binding(
                 conf,
                 tight_binding=True,
-                num_terminal_array=NUM_TERMINAL_ARRAY)
+                num_terminal_array=arr_num_terminal
+                )
         elif test_parameter == TEST_READ_ONLY:
+            arr_percent_read_only = [0.0, 0.25, 0.5, 0.75, 1.0]
             evaluation_block_binding(
                 conf,
                 tight_binding=True,
-                percent_read_only=PERCENT_READ_ONLY
+                percent_read_only=arr_percent_read_only
             )
         elif test_parameter == TEST_DISTRIBUTE:
             evaluation_distributed(
@@ -1346,26 +1351,44 @@ def main():
                 tight_binding=False,
                 num_terminal_array=NUM_TERMINAL_ARRAY)
     elif db_config_type == DB_CONFIG_SN:
+        # use 6 shards
+        #warehouse = 600
+        # 6 * g7.2xlarge
+        warehouse = 240
+        arr_percent_remote = [0.00, 0.25, 0.5, 0.75, 1.00]
+        arr_num_terminals = [200, 400, 600, 800]
+        default_percent_remote = 0.01
+        default_num_terminal = 400
         if test_parameter == TEST_DISTRIBUTE:
             evaluation_distributed(
                 conf,
                 db_types=DB_TYPE_DISTRIBUTED,
-                array_percent_remote_wh=PERCENT_REMOTE_WH_ARRAY,
-                control_percent_dist_tx=control_dist_tx)
+                array_percent_remote_wh=arr_percent_remote,
+                control_percent_dist_tx=control_dist_tx,
+                array_num_warehouse=[warehouse],
+                array_num_terminal=[default_num_terminal],
+            )
         elif test_parameter == TEST_TERMINAL:
-            evaluation_distributed(conf,
-                                   array_num_terminal=NUM_TERMINAL_ARRAY)
+            evaluation_distributed(
+                conf,
+                db_types=DB_TYPE_DISTRIBUTED,
+                array_percent_remote_wh=[default_percent_remote],
+                control_percent_dist_tx=control_dist_tx,
+                array_num_warehouse=[warehouse],
+                array_num_terminal=arr_num_terminals,
+            )
         elif test_parameter == TEST_READ_ONLY:
             evaluation_ratio_read_only_tx(
                 conf,
                 db_types=DB_TYPE_SN_LOCKING,
                 control_percent_dist_tx=control_dist_tx)
     elif db_config_type == DB_CONFIG_SCR:
+        arr_percent_remote = [0.01, 0.25, 0.5]
         if test_parameter == TEST_DISTRIBUTE:
             evaluation_distributed(
                 conf,
                 db_types=DB_TYPE_SCR,
-                array_percent_remote_wh=PERCENT_REMOTE_WH_ARRAY,
+                array_percent_remote_wh=arr_percent_remote,
                 control_percent_dist_tx=control_dist_tx)
         elif test_parameter == TEST_READ_ONLY:
             evaluation_ratio_read_only_tx(

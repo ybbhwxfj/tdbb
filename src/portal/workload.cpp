@@ -799,6 +799,9 @@ void workload::new_order(
     op.set_operation_id(++id);
   }
   mutable_request(td).set_distributed(is_dist);
+  if (is_dist) {
+    td->num_dist_ ++;
+  }
 }
 
 bool workload::on_same_node(shard_id_t shard_id, shard_id_t remote_shard_id) {
@@ -811,6 +814,15 @@ bool workload::on_same_node(shard_id_t shard_id, shard_id_t remote_shard_id) {
   return (i1->second != i2->second);
 }
 
+void workload::after_gen_procedure() {
+  uint32_t num_dist = 0;
+  uint32_t total = 0;
+  for (auto i = terminal_data_.begin(); i != terminal_data_.end(); i++) {
+    num_dist += i->second->num_dist_;
+    total += i->second->requests_.size();
+  }
+  LOG(info) << "distributed tx rate " << double(num_dist) / double(total) * 100.0;
+}
 
 void workload::gen_procedure(shard_id_t sd_id, uint32_t terminal_id) {
   BOOST_ASSERT(terminal_id != 0);
