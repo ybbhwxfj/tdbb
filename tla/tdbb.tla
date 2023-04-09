@@ -1133,7 +1133,7 @@ Next ==
     \/ \E i \in NODE_CCB : CCBHandleRegisterCCBResponse(i)
     \/ \E i \in NODE_DSB : DSBRegisterDSB(i)
     \/ \E i \in NODE_RLB : RLBHandleRegisterDSBRequest(i)
-    \/ \E i \in NODE_CCB : DSBHandleRegisterDSBResponse(i)
+    \/ \E i \in NODE_DSB : DSBHandleRegisterDSBResponse(i)
     \/ \E i \in NODE : Restart(i)
     
     
