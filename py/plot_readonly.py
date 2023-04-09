@@ -2,9 +2,18 @@ import matplotlib.pyplot as plt
 import matplotlib.backends.backend_pdf as pdf
 
 from utils import util
+import matplotlib.pylab as pylab
 
-linewidth = 2.2
-markersize = 12
+
+params = {'legend.fontsize': 'x-large',
+          'axes.labelsize': 'x-large',
+          'axes.titlesize':'x-large',
+          'xtick.labelsize':'x-large',
+          'ytick.labelsize':'x-large'}
+pylab.rcParams.update(params)
+linewidth = 4
+markersize = 14
+fontsize = 20
 
 t80_s_tro = util.json_attr_values(file='readonly/g7.2x4_t80_s_readonly.txt', attr_names=['tpm', 'percent_read_only'])
 t80_scr_tro = util.json_attr_values(file='readonly/g7.2x4_t80_scr_readonly.txt', attr_names=['tpm', 'percent_read_only'])
@@ -40,15 +49,15 @@ for key in result.keys():
         num = int(float(p) * float(num_terminal))
         x_values.append(num)
         x_ticks.append("+{}".format(num))
-    legend = ['DB-SCR', 'DB-S']
+    legend = ['DB-H', 'DB-S']
     ax.plot(x_ticks, scr_tr['tpm'], '--o', color='tab:blue', label='db-scr', linewidth=linewidth, markersize=markersize)
     ax.plot(x_ticks, sn_tr['tpm'], '-.v', color='tab:orange', label='db-s', linewidth=linewidth, markersize=markersize)
-    plt.xlabel('additional terminals issue readonly transactions')
-    plt.ylabel('TPM')
+    plt.xlabel('additional readonly terminals', size=fontsize)
+    plt.ylabel('TPM', size=fontsize)
     ax.legend(legend)
     ax.set_xticks(x_ticks)
     pp = pdf.PdfPages('fig_readonly_{}.pdf'.format(key))
-    pp.savefig(fig, bbox_inches='tight')
+    pp.savefig(fig, bbox_inches='tight', pad_inches=0)
     pp.close()
 
     plt.clf()

@@ -1,10 +1,20 @@
 import matplotlib.pyplot as plt
 import matplotlib.backends.backend_pdf as pdf
+import matplotlib.pylab as pylab
+
 
 from utils import util
 
-linewidth = 2.2
-markersize = 12
+linewidth = 4
+markersize = 14
+fontsize = 20
+
+params = {'legend.fontsize': 'x-large',
+          'axes.labelsize': 'x-large',
+          'axes.titlesize':'x-large',
+          'xtick.labelsize':'x-large',
+          'ytick.labelsize':'x-large'}
+pylab.rcParams.update(params)
 
 terminal_sdb_tb = util.json_attr_values(file='share/g7.4x_terminal_tb.json', attr_names=['tpm', 'terminals'],
                                         filter=lambda row: row['label'] == 'tight_bind')
@@ -41,26 +51,27 @@ ax.plot(terminals, tpm_terminal_lb_wan, '-.v', color='tab:brown', label='DB-S-LB
         linewidth=linewidth, markersize=markersize)
 ax.plot(terminals, tpm_terminal_lb_lan, '-.<', color='tab:orange', label='DB-S-LB(LAN setting)',
         linewidth=linewidth, markersize=markersize)
-plt.xlabel("number of terminals")
-plt.ylabel("TPM")
+plt.xlabel("number of terminals", size=fontsize)
+plt.ylabel("TPM", size=fontsize)
 ax.legend(legend)
 ax.set_xticks(terminals)
 pp = pdf.PdfPages("fig_s_tpm_bind.pdf")
-pp.savefig(fig, bbox_inches='tight')
+pp.savefig(fig, bbox_inches='tight', pad_inches=0)
 pp.close()
 
 ax.clear()
-
-ax.plot(percent_cached, tpm_cached_tb, '--o', color='tab:blue', label='DB-S-TB',
+x_ticks = ["{}%".format(x*100) for x in percent_cached]
+ax.plot(x_ticks, tpm_cached_tb, '--o', color='tab:blue', label='DB-S-TB',
         linewidth=linewidth, markersize=markersize)
-ax.plot(percent_cached, tpm_cached_lb_wan, '-.v', color='tab:brown', label='DB-S-LB(WAN setting)',
+ax.plot(x_ticks, tpm_cached_lb_wan, '-.v', color='tab:brown', label='DB-S-LB(WAN setting)',
         linewidth=linewidth, markersize=markersize)
-ax.plot(percent_cached, tpm_cached_lb_lan, '-.<', color='tab:orange', label='DB-S-LB((LAN setting)',
+ax.plot(x_ticks, tpm_cached_lb_lan, '-.<', color='tab:orange', label='DB-S-LB((LAN setting)',
         linewidth=linewidth, markersize=markersize)
-plt.xlabel("percent of CCB cached rows")
-plt.ylabel("TPM")
+plt.xlabel("percentage of CCB cached rows", size=fontsize)
+plt.ylabel("TPM", size=fontsize)
 ax.legend(legend)
-ax.set_xticks(percent_cached)
+
+ax.set_xticks(x_ticks)
 pp = pdf.PdfPages("fig_s_tpm_cache.pdf")
-pp.savefig(fig, bbox_inches='tight')
+pp.savefig(fig, bbox_inches='tight', pad_inches=0)
 pp.close()
