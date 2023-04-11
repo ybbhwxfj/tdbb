@@ -22,6 +22,7 @@ VARIABLE
     schedule,
     \* All logs have been appended if less or equal to this position of schedule
     position, 
+    
     \* CCB variables
     ccb_tx,
     ccb_cno,
@@ -59,7 +60,6 @@ rlb_vars == <<
 >>
 
 dsb_vars == <<
-
     dsb_tuple,
     dsb_tuple_cache,
     dsb_last_csn,
@@ -72,21 +72,21 @@ aux_vars == <<
     position
 >>
 
-variables == 
-    <<
-        pc,
-        aux_vars,
-        ccb_vars,
-        rlb_vars,
-        dsb_vars
-    >>
+variables == <<
+    pc,
+    aux_vars,
+    ccb_vars,
+    rlb_vars,
+    dsb_vars
+>>
 
 BLOCK_CCB == "ccb"
 BLOCK_DSB == "dsb"
 BLOCK_RLB == "rlb"
 
+PC_INIT == "init"
 PC_IDLE == "idle"
-PC_RECOVERY == "recovery"
+
 
 OP_READ == "read"
 OP_WRITE == "write"
@@ -110,10 +110,11 @@ BLOCK_COMBINATION == {
             rlb : NODE_RLB,
             dsb : NODE_DSB,
             keys : SUBSET KEY
-        ]  
-    : /\ KEY \cap NODE = {}
-      /\ Cardinality(COMBINATION) > 0
-      /\ \E s \in COMBINATION:
+        ]   
+        : 
+        /\ KEY \cap NODE = {}
+        /\ Cardinality(COMBINATION) > 0
+        /\ \E s \in COMBINATION:
             /\ c.ccb \in s
             /\ c.rlb \in s
             /\ c.dsb \in s
@@ -126,21 +127,23 @@ BLOCK_COMBINATION == {
 
 
 NodeIdOfKey(_key, _block) ==
-    LET ids == {
-                    id \in NODE:
-                        \E c \in BLOCK_COMBINATION: 
-                            /\ _key \in c.keys
-                            /\ c[_block] = id
+    LET ids == 
+        {
+            id \in NODE:
+                \E c \in BLOCK_COMBINATION: 
+                    /\ _key \in c.keys
+                    /\ c[_block] = id
        }
     IN ids
 
 NodeIdOfBlock(_in_id, _input_block, _ouput_block) ==
-    LET ids == { 
-        _out_id \in NODE:
-            /\ \E c \in BLOCK_COMBINATION: 
-                /\ _in_id = c[_input_block]
-                /\ _out_id = c[_ouput_block]
-            }
+    LET ids == 
+        { 
+            _out_id \in NODE:
+                /\ \E c \in BLOCK_COMBINATION: 
+                    /\ _in_id = c[_input_block]
+                    /\ _out_id = c[_ouput_block]
+        }
     IN ids
 
 
@@ -149,7 +152,6 @@ InitCCB ==
     /\ ccb_cno = [n \in NODE |-> 0]
     /\ ccb_tuple = [n \in NODE |-> [key \in KEY |-> <<>>]]
     /\ ccb_last_csn = [n \in NODE |-> 0]
-
 
     
 InitRLB ==
@@ -165,11 +167,10 @@ InitDSB ==
     /\ dsb_tuple = [n \in NODE |-> [key \in KEY |-> <<>>]]
     /\ dsb_tuple_cache = [n \in NODE |-> [key \in KEY |-> <<>>]]
     /\ dsb_last_csn = [n \in NODE |-> 0]
-
     /\ dsb_cno = [n \in NODE |-> 0]
 
 Init ==
-    /\ pc = [n \in NODE |-> [state |-> PC_IDLE]]
+    /\ pc = [n \in NODE |-> [state |-> PC_INIT]]
     /\ history = <<>>
     /\ schedule = <<>>
     /\ position = 0
@@ -196,21 +197,22 @@ Tuple(xid, csn) ==
     ]
 
 _NewTupleVersion(_tuple_version, _xid, _csn) ==
-    IF /\ Len(_tuple_version) >= 1 
-        /\ _tuple_version[Len(_tuple_version)].csn < _csn THEN 
-        \* only when current CSN are less than the replayed log's CSN
-        _tuple_version \o <<Tuple(_xid, _csn)>>
-    
+    IF Len(_tuple_version) > 0 THEN
+        IF _tuple_version[Len(_tuple_version)].csn < _csn THEN 
+            \* only when current CSN are less than the replayed log's CSN
+            <<Tuple(_xid, _csn)>>
+        ELSE
+            _tuple_version
     ELSE
-        _tuple_version
+        <<Tuple(_xid, _csn)>>
 
-ReadTupleLatest(_versions) ==
+_ReadTupleLatest(_versions) ==
     IF Len(_versions) = 0 THEN 
         <<>>
     ELSE
-        _versions[Len(_versions)]
+        <<_versions[Len(_versions)]>>
 
-ReadTupleLatestCommit(_versions, _tx_state) ==
+_ReadTupleLatestCommit(_versions, _tx_state) ==
     IF Len(_versions) = 0 THEN 
         <<>>
     ELSE
@@ -227,13 +229,15 @@ ReadTupleLatestCommit(_versions, _tx_state) ==
                 LET index == CHOOSE  i \in last_i :TRUE
                 IN <<_versions[index]>>
 
-CommandAction(xid, type) ==
+
+\* define Action of history\schedule
+_ActionEndCommand(xid, type) ==
     [
         otype |-> type,
         xid |-> xid
     ]
     
-ReadAction(xid, key, tuple) ==
+_ActionRead(xid, key, tuple) ==
     [
         otype |-> OP_READ,
         xid |-> xid,
@@ -241,7 +245,7 @@ ReadAction(xid, key, tuple) ==
         tuple |-> tuple
     ]
 
-WriteAction(xid, key, tuple) ==
+_ActionWrite(xid, key, tuple) ==
     [
         otype |-> OP_WRITE,
         xid |-> xid,
@@ -250,25 +254,38 @@ WriteAction(xid, key, tuple) ==
     ]
 
 
-IsLogOp(_op) ==
-    _op.otype \in LOG_OP_SET
+\* utility for select froma history/schedule/log
+_IsLogOp(_e) ==
+    _e.otype \in LOG_OP_SET
 
-IsEndLog(_log) ==
-    _log.otype \in END_OP_SET
+_IsEndOp(_e) ==
+    _e.otype \in END_OP_SET
 
-IsWriteLog(_log) ==
-    _log.otype \in WRITE_OP_SET
+_IsCommitOp(_e) ==
+    _e.otype = OP_COMMIT
 
-_IsReadWriteOp(_op) ==
-    _op.otype \in READ_WRITE_OP_SET
+_IsReadOp(_e) ==
+    _e.otype = OP_READ
+    
+IsWriteLog(_e) ==
+    _e.otype \in WRITE_OP_SET
+
+_IsReadWriteOp(_e) ==
+    _e.otype \in READ_WRITE_OP_SET
     
 _SelectLogOp(_op_sequence) ==
-    SelectSeq(_op_sequence, IsLogOp)
+    SelectSeq(_op_sequence, _IsLogOp)
 
-_SelectEndLog(_log) ==
-    SelectSeq(_log, IsEndLog)
+_SelectEnd(_log) ==
+    SelectSeq(_log, _IsEndOp)
 
-_SelectWriteLog(_log, _is_committed, _xids) ==
+_SelectCommit(_seq) ==
+    SelectSeq(_seq, _IsCommitOp)
+
+_SelectRead(_seq) ==
+    SelectSeq(_seq, _IsReadOp)
+        
+_SelectWrite(_log, _is_committed, _xids) ==
     LET F[i \in 0..Len(_log)] == 
             IF i = 0 \/ _xids = {} THEN 
                 << >>
@@ -290,47 +307,37 @@ _SelectWriteLog(_log, _is_committed, _xids) ==
     IN F[Len(_log)]
 
 _SelectCommittedWriteOfTx(_log, _xids) ==
-    _SelectWriteLog(_log, TRUE, _xids)
+    _SelectWrite(_log, TRUE, _xids)
     
 _SelectCommittedWrite(_log) ==
-    _SelectWriteLog(_log, TRUE, XID)
+    _SelectWrite(_log, TRUE, XID)
     
 _SelectUncommittedWrite(_log) ==
-    _SelectWriteLog(_log, TRUE, XID)
-    
-OpSeq2LogSeq(_lsn, _csn, _op_seq) ==
-     [
-        i \in DOMAIN _op_seq |-> 
-            IF _op_seq.otype \in {OP_WRITE} THEN
-                LogEntry(_op_seq[i].otype, _op_seq[i].xid,  _lsn + i, 0, _op_seq[i].payload)
-            ELSE
-                LET end_prefix_i == {ii \in 1..i : _op_seq[ii].otype \in END_OP_SET}
-                    end_n == Cardinality(end_prefix_i)
-                IN
-                    LogEntry(_op_seq[i].otype, _op_seq[i].xid, _lsn + i, _csn + end_n, _op_seq[i].payload)
-     ]
+    _SelectWrite(_log, FALSE, XID)
 
-AppendLogMessage(_cno, _entries) ==
+
+\* define message between blocks
+_MessageAppendLog(_cno, _entries) ==
     [
         cno |-> _cno,
         entries |-> _entries
     ] 
     
-ReportMessage(_cno, _last_csn, _end_log) ==
+_MessageReport(_cno, _last_csn, _end_log) ==
     [
         cno |-> _cno,
         entries |-> _end_log,
         last_csn |-> _last_csn
     ]
 
-ReadMessage(_xid, _cno, _key) ==
+_MessageRead(_xid, _cno, _key) ==
     [
         xid |-> _xid,
         cno |-> _cno,
         key |-> _key
     ]
 
-ReadResponse(_xid, _is_ok, _cno, _key, _tuple) ==
+_MessageReadResponse(_xid, _is_ok, _cno, _key, _tuple) ==
     [
         xid |-> _xid,
         ok |-> _is_ok,
@@ -339,13 +346,13 @@ ReadResponse(_xid, _is_ok, _cno, _key, _tuple) ==
         tuple |-> _tuple
     ]
 
-ReplayToDSBRequest(_cno, _entries) ==
+_MessageReplayToDSBRequest(_cno, _entries) ==
     [
         cno |->  _cno,
         entries |-> _entries
     ]
 
-CheckpointUpdateLastCSNMessage(_cno, _last_csn) ==
+_MessageUpdateLastCSN(_cno, _last_csn) ==
     [
         cno |->  _cno,
         last_csn |-> _last_csn
@@ -363,27 +370,7 @@ _IsConflict(_op1, _op2) ==
     /\ _IsReadWriteOp(_op1)
     /\ _IsReadWriteOp(_op2)
     /\ _op1.key = _op2.key
-    /\ _IsConflictOType(_op1.otyp, _op2.otype)
-
-_IsSerializableAfterSchedule(_schedule, _history, _new_op) ==
-    _IsReadWriteOp(_new_op) =>
-        ~(\E i \in 1..Len(_schedule):
-            /\ _IsConflict(_schedule[i], _new_op)
-            /\ ~ (\E j \in 1..Len(_history):
-                    _history[j].otype \in END_OP_SET
-                 )
-         )
-         
-_IsNotScheduled(_schedule, _new_op) ==
-    IF _new_op.otype \in END_OP_SET THEN
-        ~(\E i \in 1..Len(_schedule): 
-            /\ _schedule[i].otype \in END_OP_SET
-            /\ _schedule[i].xid = _new_op.xid
-         )
-    ELSE
-        ~(\E i \in 1..Len(_schedule):
-            _schedule[i].otype = _new_op.otype
-        )
+    /\ _IsConflictOType(_op1.otype, _op2.otype)
 
 _RegisteredRLB(_cno_info_set) ==
     LET info == CHOOSE x \in _cno_info_set:
@@ -417,63 +404,119 @@ _RegisterOK(_cno_info_set, _set, _cno) ==
     /\ _RegisterCNOEqual(_cno_info_set, _cno)
     /\ _RegisterIds(_cno_info_set) = _set
 
-SelectKeyOfLogSeq(_log, _k) == 
+_SelectKeyOfLogSeq(_log, _k) == 
     LET F[i \in 0..Len(_log)] == 
             IF i = 0 THEN 
                 << >>
-            ELSE IF /\ _log[i].key = _k  
-                THEN 
+            ELSE 
+                IF _log[i].key = _k THEN 
                     Append(F[i-1], _log[i])
-            ELSE F[i-1]
+                ELSE F[i-1]
     IN F[Len(_log)]
 
-RECURSIVE _UpdateNewVersion(_, _, _)
-_UpdateNewVersion(_versions, _ver_append, _log_seq) ==
+RECURSIVE _UpdateNewVersion(_,  _)
+_UpdateNewVersion(_versions,  _log_seq) ==
     IF Len(_log_seq) = 0 THEN
-        _ver_append
+        _versions
     ELSE 
-        LET v == _versions \o _ver_append
+        LET v == _versions 
             l == _log_seq[1]
-            a == _NewTupleVersion(v, l.xid, l.csn)
-        IN _UpdateNewVersion(v, a, SubSeq(_log_seq, 2, Len(_log_seq)))
-    
+            nv == _NewTupleVersion(v, l.xid, l.csn)
+        IN _UpdateNewVersion(nv, SubSeq(_log_seq, 2, Len(_log_seq)))
+
+_LogTxCSN(_log, _xid) ==
+    LET index_set == {i \in DOMAIN _log:
+        _log[i].xid = _xid}
+    IN
+        IF Cardinality(index_set) = 0 THEN
+            0
+        ELSE
+            LET i == CHOOSE i \in index_set : TRUE
+            IN _log[i].csn
+
+\* update the log entry's CSN by the commit log entry's            
+_LogUpdateCSN(_log_write, _log_commit) ==
+    [
+        i \in DOMAIN _log_write |->
+            IF _log_write[i].otype = OP_WRITE THEN 
+                LET xid == _log_write[i].xid
+                    csn == _LogTxCSN(_log_commit, xid)
+                IN IF csn = 0 THEN
+                        _log_write[i]  
+                   ELSE
+                        [_log_write[i] EXCEPT !.tuple[1].csn = csn]
+            ELSE
+                _log_write[i]   
+    ]
+
+\* replay log with 2 parameters    
 _ReplayLog2(_tuple_c, _log) ==
     [
         key \in KEY |-> 
-            LET ls == SelectKeyOfLogSeq(_log, key)
+            LET ls == _SelectKeyOfLogSeq(_log, key)
             IN 
             IF Len(ls) > 0 THEN
                 LET versions == _tuple_c[key]
-                    append == _UpdateNewVersion(versions, <<>> , ls)
+                    version_updated == _UpdateNewVersion(versions , ls)
                 IN 
-                    _tuple_c[key] \o append
+                    version_updated
             ELSE 
                 _tuple_c[key]
     ]
-        
+
+
+\* replay log with 3 parameters          
 _ReplayLog3(_tuple_c, _tuple, _log) ==
     [
         key \in KEY |-> 
-            LET ls == SelectKeyOfLogSeq(_log, key)
+            LET ls == _SelectKeyOfLogSeq(_log, key)
             IN 
             IF Len(ls) > 0 THEN
                 LET versions == _tuple[key] \o _tuple_c[key]
-                    append == _UpdateNewVersion(versions, <<>> , ls)
+                    version_updated == _UpdateNewVersion(versions, ls)
                 IN 
-                    _tuple_c[key] \o append
+                    version_updated
             ELSE 
                 _tuple_c[key]
     ]
 
+
+_Op2Entry(_op, _lsn, _csn) ==
+    CASE _op.otype \in READ_WRITE_OP_SET -> (
+        [
+            otype |-> _op.otype,
+            xid |-> _op.xid,
+            key |-> _op.key,
+            tuple |-> _op.tuple,
+            lsn |-> _lsn,
+            csn |-> 0
+        ]
+    )
+    [] _op.otype \in END_OP_SET -> (
+        [
+            otype |-> _op.otype,
+            xid |-> _op.xid,
+            lsn |-> _lsn,
+            csn |-> _csn
+        ]
+    )
+    [] OTHER -> (
+        _op.error_op_type
+    )
+RECURSIVE _LogEntriesAppend(_, _)
               
-LogEntryAppend(_log, _op_seq) ==
-    LET end_tx_log_index == {i \in 1..Len(_log) : _log[i].otype \in END_OP_SET}
-        csn == Cardinality(end_tx_log_index)
-        lsn == Len(_log)
-    IN
-        _log \o _op_seq
+_LogEntriesAppend(_log, _op_seq) ==
+    IF Len(_op_seq) = 0 THEN
+        _log
+    ELSE
+        LET end_tx_log_index == {i \in 1..Len(_log) : _log[i].otype \in END_OP_SET}
+            csn == Cardinality(end_tx_log_index)
+            lsn == Len(_log)
+            op == _op_seq[1]
+            entry == _Op2Entry(op, lsn + 1, csn + 1)
+        IN _LogEntriesAppend(_log \o <<entry>>, SubSeq(_op_seq, 2, Len(_op_seq)))
 
-
+        
 _CSN2LSN(_log, n) ==
     IF n = 0 \/ Len(_log) = 0 THEN
         0
@@ -484,7 +527,75 @@ _CSN2LSN(_log, n) ==
             IN l.lsn
         ELSE
             0 
-             
+
+_IsSerializable(_schedule) ==
+    ~(\E i, j, m, n \in DOMAIN _schedule:
+        /\ i < j
+        /\ m > n
+        /\ LET xi == _schedule[i].xid
+               xj == _schedule[j].xid
+           IN   /\ xi = _schedule[m].xid
+                /\ xj = _schedule[n].xid
+                /\ _IsConflict(_schedule[i], _schedule[j]) 
+                /\ _IsConflict(_schedule[m], _schedule[n]) 
+                /\ (\E c_xi \in  i..Len(_schedule):
+                        /\ _schedule[c_xi].xid =  xi
+                        /\ _schedule[c_xi].otype = OP_COMMIT
+                   )
+                /\ (\E c_xj \in  j..Len(_schedule):
+                        /\ _schedule[c_xj].xid =  xj
+                        /\ _schedule[c_xj].otype = OP_COMMIT
+                   )
+     )
+
+_IsSerializableEqual(_schedule1, _schedule2) ==
+    ~(\E i, j \in DOMAIN _schedule1:
+        \E m, n \in DOMAIN _schedule2:
+            /\ i < j
+            /\ m > n
+            /\ LET xi == _schedule1[i].xid
+                   xj == _schedule1[j].xid
+               IN   /\ xi = _schedule2[m].xid
+                    /\ xj = _schedule2[n].xid
+                    /\ _IsConflict(_schedule1[i], _schedule1[j]) 
+                    /\ _IsConflict(_schedule2[m], _schedule2[n]) 
+                    /\ (\E c_xi \in  i..Len(_schedule1):
+                            /\ _schedule1[c_xi].xid =  xi
+                            /\ _schedule1[c_xi].otype = OP_COMMIT
+                       )
+                    /\ (\E c_xj \in  j..Len(_schedule1):
+                            /\ _schedule1[c_xj].xid =  xj
+                            /\ _schedule1[c_xj].otype = OP_COMMIT
+                       )
+                    /\ (\E c_xm \in  m..Len(_schedule2):
+                            /\ _schedule1[c_xm].xid =  xi
+                            /\ _schedule1[c_xm].otype = OP_COMMIT
+                       )
+                    /\ (\E c_xn \in  n..Len(_schedule2):
+                            /\ _schedule1[c_xn].xid =  xj
+                            /\ _schedule1[c_xn].otype = OP_COMMIT
+                       )
+     )
+         
+_CanSchedule(_schedule, _new_op) ==
+    \* no such COMMIT/ABORT command
+    /\ ~(\E i \in 1..Len(_schedule): 
+            /\ _schedule[i].otype \in END_OP_SET
+            /\ _schedule[i].xid = _new_op.xid
+         )
+    /\  IF _new_op.otype \in READ_WRITE_OP_SET THEN
+            \* no such READ/WRITE operations accessing this key
+            ~(\E i \in 1..Len(_schedule):
+                /\ _schedule[i].otype \in READ_WRITE_OP_SET
+                /\ _schedule[i].xid = _new_op.xid
+                /\ _schedule[i].key = _new_op.key
+            )
+        ELSE \* prevent no accesinng transaction
+            \E i \in 1..Len(_schedule):
+                /\ _schedule[i].otype \in READ_WRITE_OP_SET
+                /\ _schedule[i].xid = _new_op.xid
+    /\ _IsSerializable(_schedule \o <<_new_op>>)
+                         
 CCBAppendLog(i) ==
     /\ pc[i].state = PC_IDLE
     /\ Len(schedule) # 0
@@ -493,10 +604,10 @@ CCBAppendLog(i) ==
            to_append_s == SubSeq(schedule, position + 1, Len(schedule))
        IN (/\ ccb_cno[i] = rlb_cno[rlb_id]
            /\ position' = Len(schedule)
-           /\ LET message == AppendLogMessage(ccb_cno[i], _SelectLogOp(to_append_s))
-                IN pc' = [pc EXCEPT ![i] = [state |-> "HandleAppendLogRequest", message |-> message]]
+           /\ LET message == _MessageAppendLog(ccb_cno[i], _SelectLogOp(to_append_s))
+                IN pc' = [pc EXCEPT ![rlb_id] = [state |-> "HandleAppendLogRequest", message |-> message]]
           )
-   /\ UNCHANGED <<
+    /\ UNCHANGED <<
             schedule,
             history,
             ccb_tx,
@@ -514,7 +625,7 @@ RLBHandleAppendLogRequest(i) ==
     /\ LET message == pc[i].message
            entries == message.entries
        IN  IF rlb_cno[i] = message.cno THEN
-                rlb_log' = [rlb_log EXCEPT ![i] = LogEntryAppend(rlb_log[i], entries)]
+                rlb_log' = [rlb_log EXCEPT ![i] = _LogEntriesAppend(rlb_log[i], entries)]
            ELSE
                 UNCHANGED <<rlb_log>>
     /\ pc' = [pc EXCEPT ![i] = [state |-> PC_IDLE]]
@@ -529,24 +640,18 @@ RLBHandleAppendLogRequest(i) ==
             dsb_vars
         >>       
 
-CCBHandleAppendLogResponse(i) ==
-    /\ pc[i].state = "HandleAppendLogResponse"
-    /\ pc' = [pc EXCEPT ![i] = [state |-> PC_IDLE]]
-    /\ UNCHANGED <<
-            aux_vars,
-            ccb_vars, 
-            rlb_vars,
-            dsb_vars
-        >>
-    
 RLBLogCommit(i) ==
     \E _index \in 1..Len(rlb_log[i]):
         /\ _index <= Len(rlb_log[i])
         /\ rlb_commit_lsn[i] < _index
         /\ rlb_commit_lsn' = [rlb_commit_lsn EXCEPT ![i] = _index ]
+        /\ LET seq == SubSeq(rlb_log[i], rlb_commit_lsn[i] + 1, _index)
+               commit_seq == _SelectCommit(seq)
+           IN history' = history \o commit_seq
         /\ UNCHANGED <<ccb_vars, dsb_vars, 
                 pc,
-                aux_vars,
+                schedule,
+                position,
                 rlb_log,
                 rlb_cno,
                 rlb_dsb,
@@ -557,7 +662,7 @@ RLBLogCommit(i) ==
             >>
 
 
-LogType2TxState(_otype) ==
+_LogType2TxState(_otype) ==
     CASE _otype = OP_ABORT -> (
         TS_ABORTED
     )
@@ -577,20 +682,20 @@ _TxStateUpdate(_old_state, _new_state) ==
         _old_state
     )
     
-RECURSIVE CCBUpdateTxState(_, _)
-CCBUpdateTxState(_ccb_tx, _log_set) ==
+RECURSIVE _CCBUpdateTxState(_, _)
+_CCBUpdateTxState(_ccb_tx, _log_set) ==
     IF Cardinality(_log_set) = 0 THEN
         _ccb_tx
     ELSE
         LET log == CHOOSE log \in _log_set : TRUE
-            state == LogType2TxState(log.otype)
+            state == _LogType2TxState(log.otype)
             xid == log.xid
             new_ccb_tx == IF \E tx \in _ccb_tx : tx.xid = xid THEN
                             LET tx == CHOOSE tx \in _ccb_tx : tx.xid = log.xid
                             IN (_ccb_tx \ {tx}) \cup {[ xid |-> tx.xid, state |-> state]}
                       ELSE
                             _ccb_tx \cup {[ xid |-> xid, state |-> state]}
-        IN CCBUpdateTxState(new_ccb_tx, _log_set \ {log})
+        IN _CCBUpdateTxState(new_ccb_tx, _log_set \ {log})
 
 
     
@@ -604,9 +709,10 @@ RLBReportToCCB(i) ==
         /\
             LET commit_index == rlb_commit_lsn[i]
                 commit_prefix_seq == SubSeq(rlb_log[i], 1, commit_index)
-                end_log_seq == _SelectEndLog(commit_prefix_seq)
-                message == ReportMessage(rlb_cno[i], rlb_last_csn[i], end_log_seq)
+                end_log_seq == _SelectEnd(commit_prefix_seq)
+                message == _MessageReport(rlb_cno[i], rlb_last_csn[i], end_log_seq)
             IN 
+               /\ Len(end_log_seq) > 0
                /\ pc' = [pc EXCEPT ![i] = [state |-> "HandleReportToCCB", message |-> message]]
     /\ UNCHANGED <<
         aux_vars,
@@ -632,11 +738,12 @@ CCBHandleReportToCCB(i) ==
                                 /\ entries[j].otype = OP_COMMIT
                          } 
        IN IF ccb_cno[i] = cno THEN
-            /\ ccb_tx' = [ccb_tx EXCEPT ![i] = CCBUpdateTxState(ccb_tx[i], end_log_set) ]
+            /\ ccb_tx' = [ccb_tx EXCEPT ![i] = _CCBUpdateTxState(ccb_tx[i], end_log_set) ]
             /\ ccb_last_csn' = [ccb_last_csn EXCEPT ![i] = last_csn]
             /\ LET rlb_node == CHOOSE _n \in NodeIdOfBlock(i, BLOCK_CCB, BLOCK_RLB) : TRUE
-                   write_log == _SelectCommittedWriteOfTx(rlb_log[i], committed) 
-                   tuple_set == _ReplayLog2(ccb_tuple[i], write_log)
+                   write_log1 == _SelectCommittedWriteOfTx(rlb_log[i], committed) 
+                   write_log2 ==  _LogUpdateCSN(write_log1, entries)
+                   tuple_set == _ReplayLog2(ccb_tuple[i], write_log2)
                IN  ccb_tuple' = [ccb_tuple EXCEPT ![i] = tuple_set]
           ELSE
             UNCHANGED <<ccb_tx, ccb_last_csn>>
@@ -651,12 +758,12 @@ CCBHandleReportToCCB(i) ==
 
 CCBWrite(i, _xid, _key) ==
     /\ pc[i].state = PC_IDLE
-    /\ LET action == WriteAction(_xid, _key, <<>>)
-           seq == IF _IsNotScheduled(schedule, action) THEN <<action>> ELSE <<>>
-       IN schedule' = schedule \o seq
+    /\ LET action == _ActionWrite(_xid, _key, <<Tuple(_xid, 0)>>)
+       IN /\ _CanSchedule(schedule, action)
+          /\ schedule' = schedule \o <<action>>
+          /\ history' = schedule \o <<action>>
     /\ UNCHANGED <<
             pc,
-            history,
             position,
             ccb_vars,
             rlb_vars,
@@ -665,10 +772,13 @@ CCBWrite(i, _xid, _key) ==
 
 CCBRead(i, _xid, _key) ==
     /\ pc[i].state = PC_IDLE
-    /\ LET tuple == ReadTupleLatest(ccb_tuple[i][_key])
+    /\ LET action == _ActionRead(_xid, _key, <<>>)
+       IN   /\ _CanSchedule(schedule, action)
+            /\ schedule' = schedule \o <<action>>
+    /\ LET tuple == _ReadTupleLatest(ccb_tuple[i][_key])
         IN IF Len(tuple) = 0 THEN
             \* read from DSB
-                /\ LET message == ReadMessage(_xid, ccb_cno[i], _key)
+                /\ LET message == _MessageRead(_xid, ccb_cno[i], _key)
                        dsb_node == CHOOSE _n \in NodeIdOfKey(_key, BLOCK_DSB): TRUE
                    IN pc' = [
                             pc EXCEPT  ![dsb_node] = 
@@ -679,13 +789,9 @@ CCBRead(i, _xid, _key) ==
                             ]
                 /\ UNCHANGED <<history>>
             ELSE \* direct read from CCB cached
-                /\ history' = history \o <<ReadAction(_xid, _key, tuple)>>
+                /\ history' = history \o <<_ActionRead(_xid, _key, tuple)>>
                 /\ UNCHANGED <<pc>>
-    /\ LET action == ReadAction(_xid, _key, <<>>)
-           seq == IF _IsNotScheduled(schedule, action) THEN <<action>> ELSE <<>>
-       IN schedule' = schedule \o seq
     /\ UNCHANGED <<
-            history,
             position,
             ccb_vars,
             rlb_vars,
@@ -694,9 +800,9 @@ CCBRead(i, _xid, _key) ==
 
 CCBAbort(i, _xid) ==
     /\ pc[i].state = PC_IDLE
-    /\ LET action == CommandAction(_xid, OP_ABORT)
-           seq == IF _IsNotScheduled(schedule, action) THEN <<action>> ELSE <<>>
-       IN schedule' = schedule \o seq
+    /\ LET action == _ActionEndCommand(_xid, OP_ABORT)
+       IN /\ _CanSchedule(schedule, action)
+          /\ schedule' = schedule \o <<action>>
     /\ UNCHANGED <<
             pc,
             history,
@@ -708,9 +814,9 @@ CCBAbort(i, _xid) ==
 
 CCBCommit(i, _xid) ==
     /\ pc[i].state = PC_IDLE
-    /\ LET action == CommandAction(_xid, OP_COMMIT)
-           seq == IF _IsNotScheduled(schedule, action) THEN <<action>> ELSE <<>>
-       IN schedule' = schedule \o seq
+    /\ LET action == _ActionEndCommand(_xid, OP_COMMIT)
+       IN /\ _CanSchedule(schedule, action)
+          /\ schedule' = schedule \o <<action>>
     /\ UNCHANGED <<
             pc, 
             history,
@@ -726,12 +832,12 @@ DSBHandleReadFromDSBRequest(i) ==
             cno == message.cno
             key == message.key
             xid == message.xid
-            tuple == ReadTupleLatest(dsb_tuple[i][key] \o dsb_tuple_cache[i][key])
+            tuple == _ReadTupleLatest(dsb_tuple[i][key] \o dsb_tuple_cache[i][key])
             response ==             
                 IF dsb_cno[i] = cno THEN 
-                    ReadResponse(xid, TRUE, dsb_cno[i], key, tuple)
+                    _MessageReadResponse(xid, TRUE, dsb_cno[i], key, tuple)
                 ELSE 
-                    ReadResponse(xid, TRUE, dsb_cno[i], key, tuple)
+                    _MessageReadResponse(xid, TRUE, dsb_cno[i], key, tuple)
         IN pc' = [pc EXCEPT  ![i] = 
                 [
                     state |-> "HandleReadFromDSBResponse", 
@@ -752,7 +858,7 @@ CCBHandleReadFromDSBResponse(i) ==
             cno == message.cno
             key == message.key
             tuple == message.tuple
-            read_action ==  ReadAction(xid, key, tuple)
+            read_action ==  _ActionRead(xid, key, tuple)
         IN history' = history \o <<read_action>>
     /\ pc' = [pc EXCEPT ![i] = [state |-> PC_IDLE]]
     /\ UNCHANGED <<
@@ -780,9 +886,9 @@ RLBReplayToDSB(i) ==
     /\  LET last_lsn == _CSN2LSN(rlb_log, rlb_last_csn[i])
             commit_lsn == rlb_commit_lsn[i]
             commit_write == _CommittedWriteLog(rlb_log[i], last_lsn + 1, commit_lsn)
-            message == ReplayToDSBRequest(rlb_cno[i], commit_write)
-        IN 
-            pc' = [ 
+            message == _MessageReplayToDSBRequest(rlb_cno[i], commit_write)
+        IN  /\ Len(commit_write) > 0
+            /\ pc' = [ 
                     pc EXCEPT ![i] = 
                     [
                         state |-> "HandleReplayToDSBRequest", 
@@ -809,7 +915,7 @@ DSBHandleReplayToDSBRequest(i) ==
             LET new_tuple_cache == _ReplayLog3(dsb_tuple_cache[i], dsb_tuple[i], entries)
             IN
             IF cno = dsb_cno[i] THEN 
-                UNCHANGED  <<pc>>
+                UNCHANGED  <<dsb_tuple_cache, pc>>
             ELSE 
                 /\ dsb_tuple_cache' = [dsb_tuple_cache EXCEPT ![i] = new_tuple_cache]
                 /\ pc' = [pc EXCEPT ![i] =
@@ -822,15 +928,10 @@ DSBHandleReplayToDSBRequest(i) ==
             ccb_vars,
             rlb_vars,
             dsb_tuple,
-
-            dsb_tuple_cache,
             dsb_last_csn,
             dsb_cno
         >>
-
-RLBHandleReplayToDSBResponse(i) ==
-    /\ pc[i].state = "HandleReplayToDSBResponse"
-
+    
 _AdvanceCSN(_last_csn, _tuple_cache) ==
     LET csn_set == {   
             (IF Len(_tuple_cache[k]) = 0 THEN
@@ -852,19 +953,23 @@ DSBFlush(i) ==
     /\ dsb_tuple' = [dsb_tuple EXCEPT ![i] = dsb_tuple_cache[i]]
     /\ LET csn == _AdvanceCSN(dsb_last_csn[i], dsb_tuple_cache[i])
        IN dsb_last_csn' = [dsb_last_csn EXCEPT ![i] =  csn]
-    /\ LET message == CheckpointUpdateLastCSNMessage(dsb_cno[i], dsb_last_csn[i])
+    /\ LET message == _MessageUpdateLastCSN(dsb_cno[i], dsb_last_csn[i])
            rlb_node == CHOOSE _n \in NodeIdOfBlock(i, BLOCK_DSB, BLOCK_RLB) : TRUE
        IN  pc' = [pc EXCEPT ![rlb_node] = [
                         state |-> "HandleUpdateLastCSN",
                         message |-> message 
                       ]
-                 ]   
+                 ]
+    /\ UNCHANGED <<
+            dsb_tuple_cache,
+            dsb_last_csn,
+            dsb_cno
+        >>
     /\ UNCHANGED <<
             aux_vars,
             ccb_vars,
-            rlb_vars,
-            dsb_vars
-            >>
+            rlb_vars
+        >>
     
 RLBHandleHandleUpdateLastCSN(i) ==
     /\ pc[i].state = "HandleUpdateLastCSN"
@@ -891,7 +996,7 @@ RLBHandleHandleUpdateLastCSN(i) ==
             aux_vars,
             ccb_vars,
             dsb_vars 
-            >>
+        >>
 
 
 _RegisterCCBRequest(_node_id) ==
@@ -908,12 +1013,11 @@ _RegisterCCBResponse(_node_id, _success, _cno, _uncommitted) ==
     ]
     
 CCBRegisterCCB(i) ==
-    /\ pc[i].state = PC_IDLE
+    /\ pc[i].state = PC_INIT
     /\ LET request == _RegisterCCBRequest(i)
            id_set == NodeIdOfBlock(i, BLOCK_CCB, BLOCK_RLB)
            rlb_id == CHOOSE n \in id_set : TRUE
-       IN /\ pc[rlb_id].state = PC_IDLE
-          /\ pc' = [pc EXCEPT ![rlb_id] = [
+       IN /\ pc' = [pc EXCEPT ![rlb_id] = [
                                     state |-> "HandleRegisterCCBRequest",
                                     message |-> request
                             ]]
@@ -922,7 +1026,7 @@ CCBRegisterCCB(i) ==
             ccb_vars,
             rlb_vars, 
             dsb_vars 
-            >>
+        >>
             
 RLBHandleRegisterCCBRequest(i) ==
     /\ pc[i].state = "HandleRegisterCCBRequest"
@@ -942,16 +1046,35 @@ RLBHandleRegisterCCBRequest(i) ==
                         /\ LET  log_seq == _UnCommittedWriteLog(rlb_log[i], 1, rlb_commit_lsn[i])
                                 uncommitted == {x \in XID: \E _li \in 1..Len(log_seq): log_seq[_li].xid = x}
                                 response == _RegisterCCBResponse(i, TRUE, cno, uncommitted)
-                           IN  pc' = [pc EXCEPT ![node_id] = [
-                                            state |-> "HandleRegisterCCBResponse",
-                                            message |-> response
-                                    ]]
+                                pc_ccb == 
+                                    [
+                                        state |-> "HandleRegisterCCBResponse",
+                                        message |-> response
+                                    ]
+                                pc_rlb == 
+                                    [
+                                        state |-> PC_IDLE
+                                    ] 
+                           IN  IF i # node_id THEN
+                                    pc' = [pc EXCEPT ![node_id] = pc_ccb,  ![i] = pc_rlb]
+                               ELSE
+                                    pc' = [pc EXCEPT ![node_id] = pc_ccb]
+                                 
                     ELSE
                         /\ LET response == _RegisterCCBResponse(i, FALSE, 0, {})
-                           IN  pc' = [pc EXCEPT ![node_id] = [
-                                            state |-> "HandleRegisterCCBResponse",
-                                            message |-> response
-                                    ]]
+                               pc_ccb == 
+                                    [
+                                        state |-> "HandleRegisterCCBResponse",
+                                        message |-> response
+                                    ]
+                               pc_rlb == 
+                                    [
+                                        state |-> PC_IDLE
+                                    ] 
+                           IN  IF i # node_id THEN
+                                    pc' = [pc EXCEPT ![node_id] = pc_ccb,  ![i] = pc_rlb]
+                               ELSE
+                                    pc' = [pc EXCEPT ![node_id] = pc_ccb]
                         /\ UNCHANGED <<rlb_ccb>>
 
     /\ UNCHANGED <<
@@ -965,7 +1088,7 @@ RLBHandleRegisterCCBRequest(i) ==
             aux_vars,
             ccb_vars,
             dsb_vars 
-            >>
+        >>
 
 RECURSIVE _ScheduleAbort(_, _)   
 _ScheduleAbort(_schedule, _to_abort) == 
@@ -973,8 +1096,8 @@ _ScheduleAbort(_schedule, _to_abort) ==
         _schedule
     ELSE
         LET x == CHOOSE x \in _to_abort : TRUE
-            action == CommandAction(x, OP_ABORT)
-            seq == IF _IsNotScheduled(schedule, action) THEN <<action>> ELSE <<>>
+            action == _ActionEndCommand(x, OP_ABORT)
+            seq == IF _CanSchedule(schedule, action) THEN <<action>> ELSE <<>>
             schedule_seq == _schedule \o seq
         IN  _ScheduleAbort(schedule_seq, _to_abort \ {x})
   
@@ -985,7 +1108,8 @@ CCBHandleRegisterCCBResponse(i) ==
             uncommitted == message.uncommitted 
             cno == message.cno
        IN IF success THEN
-             /\ schedule' = _ScheduleAbort(schedule, uncommitted)
+             /\ LET s == _ScheduleAbort(schedule, uncommitted)
+                IN  schedule' = s
              /\ ccb_cno' = [ccb_cno EXCEPT ![i] = cno]
           ELSE
             UNCHANGED <<ccb_cno, schedule>>
@@ -994,13 +1118,13 @@ CCBHandleRegisterCCBResponse(i) ==
             ccb_tx,
             ccb_tuple,
             ccb_last_csn
-            >>
+        >>
     /\ UNCHANGED <<
             history,
             position,
             rlb_vars,
             dsb_vars 
-            >>
+        >>
 
 _RegisterDSBRequest(_last_csn, _dsb_id) ==
     [
@@ -1020,11 +1144,10 @@ _RegisterDSBResponse(_node_id, _success, _cno, _entries) ==
 
                
 DSBRegisterDSB(i) ==
-    /\ pc[i].state = PC_IDLE
+    /\ pc[i].state = PC_INIT
     /\ LET message == _RegisterDSBRequest(dsb_last_csn[i], i)
             rlb_id == CHOOSE n \in NodeIdOfBlock(i, BLOCK_DSB, BLOCK_RLB) : TRUE
-       IN  /\ pc[rlb_id].state = PC_IDLE
-           /\ rlb_cno[rlb_id] < CNO_MAX
+       IN  /\ rlb_cno[rlb_id] < CNO_MAX
            /\ pc' = [pc EXCEPT ![rlb_id] = [
                             state |-> "HandleRegisterDSBRequest",
                             message |-> message
@@ -1035,7 +1158,7 @@ DSBRegisterDSB(i) ==
             ccb_vars,
             rlb_vars,
             dsb_vars 
-            >>
+        >>
 
         
 RLBHandleRegisterDSBRequest(i) ==
@@ -1050,20 +1173,36 @@ RLBHandleRegisterDSBRequest(i) ==
                 commit_write == _CommittedWriteLog(rlb_log[i], last_lsn + 1, commit_lsn)
                 response == _RegisterDSBResponse(i, FALSE, 0, commit_write)
             IN 
-                /\ pc' = [pc EXCEPT ![node_id] = [
+                /\ LET pc_dsb == 
+                        [
                             state |-> "HandleRegisterDSBResponse",
                             message |-> response
-                    ]]
+                        ]
+                       pc_rlb == 
+                        [
+                            state |-> PC_INIT
+                        ]
+                   IN IF i # node_id THEN
+                        pc' = [pc EXCEPT ![node_id] = pc_dsb,  ![i] = pc_rlb]
+                      ELSE
+                        pc' = [pc EXCEPT ![node_id] = pc_dsb]
                 /\ UNCHANGED <<rlb_cno, rlb_dsb>>
           ELSE
             LET cno == rlb_cno[i] + 1
                 response == _RegisterDSBResponse(i, TRUE, cno, <<>>)
-            IN  /\ pc' = [pc EXCEPT ![node_id] = [
-                                        state |-> "HandleRegisterDSBResponse",
-                                        message |-> response
-                                ]]
-
-
+            IN  /\ LET pc_dsb == 
+                        [
+                            state |-> "HandleRegisterDSBResponse",
+                            message |-> response
+                        ]
+                       pc_rlb == 
+                        [
+                            state |-> PC_INIT
+                        ]
+                   IN IF i # node_id THEN
+                        pc' = [pc EXCEPT ![node_id] = pc_dsb,  ![i] = pc_rlb]
+                      ELSE
+                        pc' = [pc EXCEPT ![node_id] = pc_dsb]
                 /\ LET dsb_info == [
                                     cno |-> cno,
                                     node_id |-> node_id
@@ -1084,7 +1223,7 @@ RLBHandleRegisterDSBRequest(i) ==
             aux_vars,
             ccb_vars,
             dsb_vars 
-            >>
+        >>
 
 DSBHandleRegisterDSBResponse(i) ==
     /\ pc[i].state = "HandleRegisterDSBResponse"
@@ -1100,7 +1239,7 @@ DSBHandleRegisterDSBResponse(i) ==
             /\ LET tuple_cache == _ReplayLog3(dsb_tuple_cache[i], dsb_tuple[i], entries)
                IN dsb_tuple_cache' = [dsb_tuple_cache EXCEPT ![i] = tuple_cache]
             /\ UNCHANGED <<dsb_cno>>
-    /\ pc' = [pc EXCEPT ![i] = [state |-> PC_IDLE]]
+    /\ pc' = [pc EXCEPT ![i] = [state |-> PC_INIT]]
     /\ UNCHANGED <<
             dsb_tuple,
             dsb_last_csn
@@ -1109,7 +1248,7 @@ DSBHandleRegisterDSBResponse(i) ==
             aux_vars,
             ccb_vars,
             rlb_vars
-            >>
+        >>
 
 _RestartCCB(i) ==
     /\ ccb_tx' = [ccb_tx EXCEPT ![i] = {}]
@@ -1132,7 +1271,7 @@ _RestartDSB(i) ==
 
 
 Restart(i) ==
-    /\ pc' = [pc EXCEPT ![i] = [state |-> PC_IDLE]]
+    /\ pc' = [pc EXCEPT ![i] = [state |-> PC_INIT]]
     /\ (\/ /\ i \in NODE_CCB
            /\ _RestartCCB(i)
         \/ UNCHANGED <<ccb_vars>>
@@ -1156,7 +1295,6 @@ Next ==
     \/ \E i \in NODE_CCB, x \in XID: CCBCommit(i, x)
     \/ \E i \in NODE_CCB : CCBAppendLog(i)
     \/ \E i \in NODE_RLB : RLBHandleAppendLogRequest(i)
-    \/ \E i \in NODE_CCB : CCBHandleAppendLogResponse(i)
     \/ \E i \in NODE_RLB : RLBLogCommit(i)
     \/ \E i \in NODE_CCB : CCBHandleReadFromDSBResponse(i)
     \/ \E i \in NODE_DSB : DSBHandleReadFromDSBRequest(i)
@@ -1164,7 +1302,6 @@ Next ==
     \/ \E i \in NODE_CCB : CCBHandleReportToCCB(i)
     \/ \E i \in NODE_RLB : RLBReplayToDSB(i)
     \/ \E i \in NODE_DSB : DSBHandleReplayToDSBRequest(i)
-    \/ \E i \in NODE_RLB : RLBHandleReplayToDSBResponse(i)
     \/ \E i \in NODE_DSB : DSBFlush(i)
     \/ \E i \in NODE_RLB : RLBHandleHandleUpdateLastCSN(i)
     \/ \E i \in NODE_CCB : CCBRegisterCCB(i)
@@ -1186,6 +1323,89 @@ NoStuttering ==
     
 LivenessSpec == Init /\ [][Next]_variables /\ NoStuttering
 
+_ExistingCommit(_history, xid) ==
+    \E i \in DOMAIN _history:
+        /\ _history[i].otype = OP_COMMIT
+        /\ _history[i].xid = xid
+
+\* Write before Read dependency, read from empty value (<<>>)        
+_ExistingWRFirstDependency(_schedule, _out, _key) ==
+    \E i \in DOMAIN _schedule:
+        /\ LET history_sub == SubSeq(_schedule, i + 1, Len(_schedule)) 
+           IN _ExistingCommit(history_sub, _out)
+        /\ _schedule[i].xid = _out
+        /\ _schedule[i].otype = OP_READ
+        /\ ~(\E k \in 1..i: \* these is no another write ahead of i
+                /\ k # i
+                /\ _schedule[k].otype = OP_WRITE
+                /\ _schedule[k].key = _key
+                /\ LET history_sub == SubSeq(_schedule, k+1, i)
+                   IN _ExistingCommit(history_sub, _out)
+            )
+            
+\* Write before Read dependency, read from previous write
+_ExistingWRDependency(_schedule, _in, _out, _key) ==
+    \E i, j \in DOMAIN _schedule:
+        /\ i < j
+        /\ _schedule[i].xid = _in
+        /\ _schedule[j].xid = _out
+        /\ _schedule[i].otype = OP_WRITE
+        /\ _schedule[j].otype = OP_READ
+        /\ _schedule[i].key = _key
+        /\ _schedule[j].key = _key
+        /\ LET history_sub == SubSeq(_schedule, i, j) 
+           IN _ExistingCommit(history_sub, _in)
+        /\ LET history_sub == SubSeq(_schedule, j + 1, Len(_schedule))
+           IN _ExistingCommit(history_sub, _out)
+        /\ \* these is no another committed write between i and j
+           ~(\E k \in i..j: 
+                /\ k # i
+                /\ k # j
+                /\ _schedule[k].otype = OP_WRITE
+                /\ _schedule[k].key = _key
+                /\ LET history_sub == SubSeq(_schedule, k+1, j)
+                   IN _ExistingCommit(history_sub, _out)
+            )
+            
+_ReadHistoryConsistent(_history) ==
+    LET read_seq == _SelectRead(_history)
+    IN \A i \in DOMAIN read_seq:
+        CASE Len(read_seq[i].tuple) = 0 -> (
+           LET out_x == read_seq[i].xid
+               key == read_seq[i].key
+           IN (
+              LET history_sub == SubSeq(_history, i+1, Len(_history))
+              IN _ExistingCommit(history_sub, out_x)
+             ) 
+                => _ExistingWRFirstDependency(_history, out_x, key)
+        )
+        [] Len(read_seq[i].tuple) = 1 -> (
+           LET in_x == read_seq[i].tuple[1].xid
+               out_x == read_seq[i].xid
+               key == read_seq[i].key
+           IN (
+              /\ in_x # out_x
+              /\ LET history_prefix == SubSeq(_history, 1, i) 
+                 IN _ExistingCommit(history_prefix, in_x)
+              /\ _ExistingCommit(_history, out_x)
+             ) 
+                => _ExistingWRDependency(_history, in_x, out_x, key)
+        )
+        [] OTHER -> (
+            FALSE
+        )
+        
+
+HistorySerializable ==
+    /\ _IsSerializable(history)
+    /\ _IsSerializableEqual(history, schedule)
+    
+ReadConsistency ==
+    _ReadHistoryConsistent(history)
+
+Corectness ==
+    /\ HistorySerializable
+    /\ ReadConsistency
 
 =============================================================================
 
