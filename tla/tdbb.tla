@@ -449,6 +449,22 @@ _LogUpdateCSN(_log_write, _log_commit) ==
                 _log_write[i]   
     ]
 
+
+_InvalidCCBCache(_tuple, _last_csn) ==
+    [
+        key \in KEY |-> 
+            IF Len(_tuple[key]) > 0 THEN
+                IF Len(_tuple[key]) = 1 THEN
+                    IF _tuple[key][1].csn < _last_csn THEN
+                        <<>>
+                    ELSE
+                        _tuple[key]
+                ELSE
+                   _tuple.length_error
+            ELSE 
+               <<>>
+    ]
+    
 \* replay log with 2 parameters    
 _ReplayLog2(_tuple_c, _log) ==
     [
@@ -743,8 +759,9 @@ CCBHandleReportToCCB(i) ==
             /\ LET rlb_node == CHOOSE _n \in NodeIdOfBlock(i, BLOCK_CCB, BLOCK_RLB) : TRUE
                    write_log1 == _SelectCommittedWriteOfTx(rlb_log[i], committed) 
                    write_log2 ==  _LogUpdateCSN(write_log1, entries)
-                   tuple_set == _ReplayLog2(ccb_tuple[i], write_log2)
-               IN  ccb_tuple' = [ccb_tuple EXCEPT ![i] = tuple_set]
+                   tuple_set1 == _ReplayLog2(ccb_tuple[i], write_log2)
+                   tuple_set2 == _InvalidCCBCache(tuple_set1, last_csn)
+               IN  ccb_tuple' = [ccb_tuple EXCEPT ![i] = tuple_set2]
           ELSE
             UNCHANGED <<ccb_tx, ccb_last_csn>>
     /\ pc' = [pc EXCEPT ![i] = [state |-> PC_IDLE]]
