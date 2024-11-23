@@ -477,6 +477,35 @@ void tx_coordinator::timeout_clean_up() {
   }
 }
 
+#ifdef DB_TYPE_GEO_REP_OPTIMIZE
+void tx_coordinator::handle_tx_enable_violate(const tx_enable_violate &msg) {
+  auto iter = rm_tracer_.find(TO_RG_ID(msg.source()));
+  if (iter == rm_tracer_.end()) {
+    BOOST_ASSERT(false);
+    return;
+  }
+  iter->second.violate_ = msg.violable();
+  send_tx_enable_violate();
+}
+
+void tx_coordinator::send_tx_enable_violate() {
+  for (const auto &iter : rm_tracer_) {
+    if (not iter.second.violate_) {
+      return;
+    }
+  }
+  for (const auto &iter : rm_tracer_) {
+    auto msg = std::make_shared<tx_enable_violate>();
+    msg->set_xid(xid_);
+    msg->set_source(node_id_);
+    msg->set_dest(iter.second.lead_);
+    auto r = service_->async_send(iter.second.lead_, TM_ENABLE_VIOLATE, msg);
+    if (not r) {
+      BOOST_LOG_TRIVIAL(error) << " send TM tx_rm enable violate error";
+    }
+  }
+}
+#endif // DB_TYPE_GEO_REP_OPTIMIZE
 void tx_coordinator::debug_tx(std::ostream &os) {
   os << id_2_name(node_id_) << " TM : " << xid_
      << " state: " << enum2str(tm_state_) << " trace: " << trace_message_

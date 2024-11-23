@@ -468,6 +468,17 @@ result<void> cc_block::ccb_handle_message(const ptr<connection>, message_type,
   return outcome::success();
 }
 
+result<void> cc_block::ccb_handle_message(const ptr<connection> &, message_type t, const ptr<tx_enable_violate> m) {
+#ifdef DB_TYPE_GEO_REP_OPTIMIZE
+  if (t == TM_ENABLE_VIOLATE) {
+    handle_tx_tm_enable_violate(*m);
+  } else if (t == RM_ENABLE_VIOLATE) {
+    handle_tx_rm_enable_violate(*m);
+  }
+  return outcome::success();
+#endif //DB_TYPE_GEO_REP_OPTIMIZE
+}
+
 result<void> cc_block::ccb_handle_message(const ptr<connection>, message_type,
                                           const ptr<calvin_part_commit> m) {
   handle_calvin_part_commit(m);
@@ -873,8 +884,41 @@ void cc_block::handle_tx_tm_end(const tx_tm_end &msg) {
   } else {
   }
 }
-#endif // DB_TYPE_SHARE_NOTHING
 
+
+
+#ifdef DB_TYPE_GEO_REP_OPTIMIZE
+void cc_block::handle_tx_tm_enable_violate(const tx_enable_violate &msg) {
+  BOOST_ASSERT(msg.dest() == node_id_);
+  xid_t xid = msg.xid();
+  uint32_t terminal_id = xid_to_terminal_id(xid);
+  std::pair<ptr<tx_context>, bool> r = tx_context_[terminal_id].find(xid);
+  if (r.second) {
+    ptr<tx_context> ctx = r.first;
+    ctx->handle_tx_enable_violate();
+  }
+}
+void cc_block::handle_tx_rm_enable_violate(const tx_enable_violate &msg) {
+  BOOST_ASSERT(msg.dest() == node_id_);
+  xid_t xid = msg.xid();
+  uint32_t terminal_id = xid_to_terminal_id(xid);
+  std::pair<ptr<tx_coordinator>, bool> r = tx_coordinator_[terminal_id].find(xid);
+  if (r.second) {
+    auto tm = r.first;
+    async_run_tx_routine(
+        tm->get_strand(),
+        [tm, msg] {
+          tm->handle_tx_enable_violate(msg);
+        }
+        //BOOST_LOG_TRIVIAL(trace) << "victim tx_rm " << xid;
+    );
+
+  }
+}
+
+#endif // DB_TYPE_GEO_REP_OPTIMIZE
+
+#endif // DB_TYPE_SHARE_NOTHING
 #endif // #ifdef DB_TYPE_NON_DETERMINISTIC
 
 #ifdef DB_TYPE_NON_DETERMINISTIC

@@ -948,6 +948,146 @@ void tx_context::handle_finish_tx_phase2_commit() {
 
 void tx_context::handle_finish_tx_phase2_abort() { abort_tx_2p(); }
 
+
+#ifdef DB_TYPE_GEO_REP_OPTIMIZE
+
+void tx_context::register_dependency(const ptr<tx_context> &out) {
+  if (xid_ == out->xid_) {
+    BOOST_LOG_TRIVIAL(error) << "cannot register the same transaction";
+    return;
+  }
+  if (xid_ < out->xid_) {
+    mutex_.lock();
+    out->mutex_.lock();
+  } else {
+    out->mutex_.lock();
+    mutex_.lock();
+  }
+  do {
+    if (out->state_ == RM_ABORTED || out->state_ == RM_COMMITTED) {
+      break;
+    }
+    if (state_ == RM_COMMITTED || state_ == RM_ABORTED) {
+      break;
+    } else {
+      auto i = dep_out_set_.find(out->xid_);
+      if (i == dep_out_set_.end()) {
+        out->dep_in_count_++;
+        dep_out_set_[out->xid_] = out;
+        out->dep_in_set_[xid_] = shared_from_this();
+      }
+    }
+  } while (false);
+
+  if (xid_ < out->xid_) {
+    out->mutex_.lock();
+    mutex_.lock();
+  } else {
+    mutex_.lock();
+    out->mutex_.lock();
+  }
+}
+
+void tx_context::report_dependency() {
+  mutex_.lock();
+  for (const auto &kv : dep_out_set_) {
+    ptr<tx_context> ctx = kv.second;
+    xid_t xid = xid_;
+    auto fn = [ctx, xid]() {
+      ctx->mutex_.lock();
+      auto i = ctx->dep_in_set_.find(xid);
+      if (i != ctx->dep_in_set_.end()) {
+        if (ctx->dep_in_count_ > 0) {
+          ctx->dep_in_count_--;
+          if (ctx->dep_in_count_ == 0) {
+            auto fn = [ctx]() {
+              ctx->dependency_commit();
+            };
+            boost::asio::post(ctx->get_strand(), fn);
+          }
+        }
+      }
+      ctx->mutex_.unlock();
+    };
+    boost::asio::post(ctx->get_strand(), fn);
+  }
+  mutex_.unlock();
+}
+
+void tx_context::dependency_commit() {
+  std::scoped_lock l(mutex_);
+  dependency_committed_ = true;
+  if (distributed_) {
+    dlv_try_tx_prepare_commit();
+  } else {
+    dlv_try_tx_commit();
+  }
+}
+
+void tx_context::dlv_try_tx_commit() {
+#ifdef TX_TRACE
+  trace_message_ += "dlv try C;";
+#endif
+  if (dep_in_count_ == 0 && commit_log_synced_ && not dlv_commit_) {
+    dlv_commit_ = true;
+    tx_committed();
+  }
+}
+
+void tx_context::dlv_try_tx_prepare_commit() {
+#ifdef TX_TRACE
+  trace_message_ += "dlv try PC;";
+#endif
+  if (dep_in_count_ == 0 && prepare_commit_log_synced_ && not dlv_prepare_) {
+    dlv_prepare_ = true;
+    tx_prepare_committed();
+  }
+}
+
+void tx_context::dlv_abort() {
+  if (is_geo_rep_optimized()) {
+#ifdef TX_TRACE
+    trace_message_ += "dlv A;";
+#endif
+    for (const auto &kv : dep_out_set_) {
+      kv.second->dlv_abort();
+    }
+    if (dep_in_count_ > 0) {
+      error_code_ = EC::EC_CASCADE;
+    }
+  }
+}
+
+void tx_context::dlv_make_violable() {
+#ifdef TX_TRACE
+  trace_message_ += "dlv V;";
+#endif
+  for (const auto &l : locks_) {
+    violate v;
+    mgr_->make_violable(l.second->xid(),
+                        l.second->type(),
+                        l.second->table_id(),
+                        l.second->key(), v);
+    num_read_violate_ += v.read_v_;
+    num_write_violate_ += v.write_v_;
+  }
+}
+
+void tx_context::handle_tx_enable_violate() {
+  dlv_make_violable();
+}
+
+void tx_context::send_tx_enable_violate() {
+  auto msg = std::make_shared<tx_enable_violate>();
+  msg->set_source(node_id_);
+  msg->set_dest(coord_node_id_);
+  msg->set_violable(true);
+  auto r = service_->async_send(msg->dest(), RM_ENABLE_VIOLATE, msg);
+  if (!r) {
+    BOOST_LOG_TRIVIAL(error) << "report RM enable violate " << msg->violable();
+  }
+}
+#endif // DB_TYPE_GEO_REP_OPTIMIZE
 #endif // DB_TYPE_SHARE_NOTHING
 
 void tx_context::timeout_clean_up() {

@@ -1,2 +1,8 @@
 syntax = "proto3";
 
+message tx_enable_violate {
+  uint32 source = 1;
+  uint32 dest = 2;
+  uint64 xid = 3;
+  bool violable = 4;
+}
