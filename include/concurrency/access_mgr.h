@@ -38,6 +38,15 @@ public:
 
   void unlock(xid_t xid, lock_mode lt, uint32_t table_id, uint32_t shard_id,
               const predicate &pred);
+			  
+#ifdef DB_TYPE_GEO_REP_OPTIMIZE
+  void make_violable(
+      xid_t xid,
+      lock_mode lt,
+      uint32_t table_id,
+      tuple_id_t key,
+      violate &v);
+#endif //DB_TYPE_GEO_REP_OPTIMIZE
 
   std::pair<tuple_pb, bool> get(uint32_t table_id, uint32_t shard_id, tuple_id_t key);
 

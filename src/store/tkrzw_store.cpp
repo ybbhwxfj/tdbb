@@ -1,9 +1,8 @@
-#include "store/tkrzw_store.h"
+#include "kv/tkrzw_store.h"
 #ifdef DB_TYPE_TK
 #include "common/endian.h"
 #include "common/logger.hpp"
 #include "common/tx_log.h"
-#include "tkrzw_dbm_hash.h"
 #include <boost/filesystem.hpp>
 #include <map>
 

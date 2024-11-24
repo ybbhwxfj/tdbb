@@ -7,8 +7,8 @@
 #include "common/uniform_generator.hpp"
 #include "common/utils.h"
 #include "proto/proto.h"
-#include "store/rocks_store.h"
-#include "store/tkrzw_store.h"
+#include "kv/rocks_store.h"
+#include "kv/tkrzw_store.h"
 ds_block::ds_block(const config &conf, net_service *service)
     : conf_(conf), service_(service), node_id_(conf.node_id()),
       node_name_(id_2_name(conf.node_id())),

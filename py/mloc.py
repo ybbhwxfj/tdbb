@@ -7,6 +7,8 @@ DB_TYPE_SHARED = 'db-s'
 DB_TYPE_SHARED_NOTHING = 'db-sn'
 DB_TYPE_DETERMINISTIC = 'db-d'
 DB_TYPE_TK = "db-tk"
+DB_TYPE_GEO_REP_OPTIMIZE = "db-gro"
+
 OTHER = 'OTHER'
 CCB = 'CCB'
 DSB = 'DSB'
@@ -57,7 +59,8 @@ DB_TYPES = [
     DB_TYPE_SHARED_NOTHING,
     DB_TYPE_DETERMINISTIC,
     DB_TYPE_DETERMINISTIC,
-    DB_TYPE_TK
+    DB_TYPE_TK,
+    DB_TYPE_GEO_REP_OPTIMIZE,
 ]
 
 Type2Macro = {
@@ -80,6 +83,13 @@ Type2Macro = {
         DEF_DB_TYPE_NON_DETERMINISTIC,
         DEF_DB_TYPE_TK
     },
+
+    DB_TYPE_GEO_REP_OPTIMIZE: {
+        DEF_DB_TYPE_SHARE_NOTHING,
+        DEF_DB_TYPE_NON_DETERMINISTIC,
+        DEF_DB_TYPE_ROCKS,
+        DEF_DB_TYPE_GEO_REP_OPTIMIZE
+    }
 }
 
 DEF_DB_SHARED = 'DB_SHARED'
@@ -191,3 +201,5 @@ if __name__ == '__main__':
     diff_block_loc(project_path, dbt2path, DB_TYPE_SHARED_NOTHING, DB_TYPE_DETERMINISTIC)
     print("from shared-nothing to TK DB ...")
     diff_block_loc(project_path, dbt2path, DB_TYPE_SHARED_NOTHING, DB_TYPE_TK)
+    print("from shared-nothing to GRO_OPTIMIZED DB ...")
+    diff_block_loc(project_path, dbt2path, DB_TYPE_SHARED_NOTHING, DB_TYPE_GEO_REP_OPTIMIZE)

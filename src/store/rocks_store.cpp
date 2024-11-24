@@ -1,4 +1,4 @@
-#include "store/rocks_store.h"
+#include "kv/rocks_store.h"
 #ifdef DB_TYPE_ROCKS
 #include "common/endian.h"
 #include "common/logger.hpp"

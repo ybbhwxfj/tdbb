@@ -964,10 +964,10 @@ void tx_context::register_dependency(const ptr<tx_context> &out) {
     mutex_.lock();
   }
   do {
-    if (out->state_ == RM_ABORTED || out->state_ == RM_COMMITTED) {
+    if (out->state_ == RM_ABORTING || out->state_ == RM_COMMITTING) {
       break;
     }
-    if (state_ == RM_COMMITTED || state_ == RM_ABORTED) {
+    if (state_ == RM_COMMITTING || state_ == RM_ABORTING) {
       break;
     } else {
       auto i = dep_out_set_.find(out->xid_);
