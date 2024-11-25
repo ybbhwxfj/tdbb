@@ -22,7 +22,9 @@ tx_context::tx_context(boost::asio::io_context::strand s, uint64_t xid,
                        uint32_t node_id, std::optional<node_id_t> dsb_node_id,
                        const std::unordered_map<shard_id_t, node_id_t> &shard2node,
                        uint64_t cno,
-                       bool distributed, access_mgr *mgr, net_service *service,
+                       bool distributed, lock_mgr_global *mgr,
+                       access_mgr *access,
+                       net_service *service,
                        ptr<connection> conn, write_ahead_log *write_ahead_log,
                        fn_tx_state fn, deadlock *dl)
     : tx_rm(s, xid), cno_(cno), node_id_(node_id),
@@ -30,7 +32,7 @@ tx_context::tx_context(boost::asio::io_context::strand s, uint64_t xid,
       shard_id_2_node_id_(shard2node),
       xid_(xid),
       distributed_(distributed), coord_node_id_(0), oid_(1), max_ops_(0),
-      mgr_(mgr), service_(service), cli_conn_(std::move(conn)),
+      mgr_(mgr), access_(access), service_(service), cli_conn_(std::move(conn)),
       error_code_(EC::EC_OK), state_(rm_state::RM_IDLE), lock_acquire_(nullptr),
       wal_(write_ahead_log), has_respond_(false), fn_tx_state_(std::move(fn)),
       prepare_commit_log_synced_(false), commit_log_synced_(false), dl_(dl),
@@ -124,7 +126,7 @@ void tx_context::async_read(uint32_t table_id, shard_id_t shard_id, tuple_id_t k
     s->lock_wait_time_tracer_.end();
 
     if (ec == EC::EC_OK) {
-      std::pair<tuple_pb, bool> r = s->mgr_->get(table_id, shard_id, key);
+      std::pair<tuple_pb, bool> r = s->access_->get(table_id, shard_id, key);
 
       if (r.second) {
         BOOST_ASSERT(not(ec == EC::EC_OK && is_tuple_nil(r.first)));
@@ -174,7 +176,7 @@ void tx_context::async_update(uint32_t table_id, shard_id_t shard_id, tuple_id_t
     s->lock_wait_time_tracer_.end();
 
     if (ec == EC::EC_OK) {
-      std::pair<tuple_pb, bool> r = s->mgr_->get(table_id, shard_id, key);
+      std::pair<tuple_pb, bool> r = s->access_->get(table_id, shard_id, key);
       if (r.second) {
         fn_update_done(EC::EC_OK);
       } else {
@@ -216,7 +218,7 @@ void tx_context::async_insert(uint32_t table_id, shard_id_t shard_id, tuple_id_t
     s->lock_wait_time_tracer_.end();
 
     if (ec == EC::EC_OK) {
-      std::pair<tuple_pb, bool> r = s->mgr_->get(table_id, shard_id, key);
+      std::pair<tuple_pb, bool> r = s->access_->get(table_id, shard_id, key);
       if (r.second) {
         fn_write_done(EC::EC_DUPLICATION_ERROR);
       } else {
@@ -268,7 +270,7 @@ void tx_context::async_remove(uint32_t table_id, shard_id_t shard_id, tuple_id_t
   lock_acquire_ = [s, table_id, shard_id, key, fn_removed](EC ec) {
     s->lock_wait_time_tracer_.end();
 
-    std::pair<tuple_pb, bool> r = s->mgr_->get(table_id, shard_id, key);
+    std::pair<tuple_pb, bool> r = s->access_->get(table_id, shard_id, key);
     if (r.second) {
       fn_removed(ec, std::move(r.first));
     } else {
@@ -362,7 +364,7 @@ void tx_context::read_data_from_dsb_response(
   if (ec == EC::EC_OK) {
     if (has_tuple) {
       BOOST_ASSERT(!is_tuple_nil(tuple));
-      mgr_->put(table_id, shard_id, key, std::move(tuple));
+      access_->put(table_id, shard_id, key, std::move(tuple));
       // auto pair = mgr_->get(table_id, key);
       // BOOST_ASSERT(pair.second);
       LOG(trace) << node_name_ << " cached table:" << table_id << " key:" << key;

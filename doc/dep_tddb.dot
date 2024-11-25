@@ -1,0 +1,12 @@
+digraph TDDB {
+"DSB(access)" [label="DSB(access)"];
+CCB -> "DSB(access)" [label=2];
+CCB -> RLB [label=4];
+RLB -> "DSB(access)" [label=1];
+CCB [label=CCB];
+RLB [label=RLB];
+"DSB(storage)" [label="DSB(storage)"];
+"DSB(access)" [label="DSB(access)"];
+"DSB(access)" -> "DSB(storage)" [label=2];
+"DSB(access)" [label="DSB(access)"];
+}

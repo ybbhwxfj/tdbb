@@ -1,7 +1,7 @@
 
 ## Install dependency on Ubuntu 22.04
 
-    ./script/install.sh
+    bash script/build_third_party.sh" -i /PATH_TO_INSTALL_DIR
 
 This would install prerequisite, third party library including boost, rocksdb, tkrzw, protobuf, oneTBB
 

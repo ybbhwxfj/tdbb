@@ -110,20 +110,19 @@ TIKV_DIR = []
 
 
 TDDB_MODULES = {
-    'cc': [
+    'CCB': [
         'concurrency'
     ],
-    'log': [
+    'RLB': [
         'replog',
         'raft'
     ],
-    'access': [
-        'concurrency/access_mgr.h',
+    'DSB(access)': [
+        'access',
         'store'
     ],
-    'storage': [
-        'kv/rocks_store.h',
-        'kv/tkrzw_store.h'
+    'DSB(storage)': [
+        'kv'
     ]
 }
 TDDB_C_INCLUDE = '^\s*#include\s*"(.*)"\s'

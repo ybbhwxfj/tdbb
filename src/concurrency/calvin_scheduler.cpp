@@ -4,7 +4,7 @@
 #ifdef DB_TYPE_CALVIN
 
 calvin_scheduler::calvin_scheduler(fn_calvin_context_find fn_find,
-                                   const config &conf, access_mgr *lm,
+                                   const config &conf, lock_mgr_global *lm,
                                    write_ahead_log *wal, net_service *service)
     : fn_find_(std::move(fn_find)), conf_(conf), node_id_(conf.node_id()),
       access_mgr_(lm), wal_(wal), service_(service) {}

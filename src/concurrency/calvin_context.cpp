@@ -11,7 +11,7 @@ calvin_context::calvin_context(boost::asio::io_context::strand s, xid_t xid,
                                node_id_t node_id, std::optional<node_id_t> dsb_node_id,
                                const std::unordered_map<shard_id_t, node_id_t> &shard2node,
                                uint64_t cno, ptr<tx_request> req,
-                               net_service *service, access_mgr *access,
+                               net_service *service, lock_mgr_global *access,
                                fn_calvin_context_remove fn_remove)
     : tx_rm(s, xid), xid_(xid), node_id_(node_id),
       ctx_opt_dsb_node_id_(dsb_node_id),

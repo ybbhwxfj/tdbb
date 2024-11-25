@@ -6,7 +6,7 @@
 
 #include "common/hash_table.h"
 #include "common/ptr.hpp"
-#include "concurrency/access_mgr.h"
+#include "concurrency/lock_mgr_global.h"
 #include "concurrency/calvin_context.h"
 #include "concurrency/calvin_epoch_ops.h"
 #include "concurrency/write_ahead_log.h"
@@ -18,14 +18,14 @@ private:
   fn_calvin_context_find fn_find_;
   config conf_;
   node_id_t node_id_;
-  access_mgr *access_mgr_;
+  lock_mgr_global *access_mgr_;
   write_ahead_log *wal_;
   net_service *service_;
   std::string trace_message_;
 
 public:
   calvin_scheduler(fn_calvin_context_find fn_find, const config &conf,
-                   access_mgr *lm, write_ahead_log *wal, net_service *service);
+                   lock_mgr_global *lm, write_ahead_log *wal, net_service *service);
 
   void schedule(const ptr<calvin_epoch_ops> &);
 

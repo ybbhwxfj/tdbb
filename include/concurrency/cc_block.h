@@ -6,7 +6,7 @@
 #include "common/hash_table.h"
 #include "common/msg_time.h"
 #include "common/timer.h"
-#include "concurrency/access_mgr.h"
+#include "concurrency/lock_mgr_global.h"
 #include "concurrency/calvin_collector.h"
 #include "concurrency/calvin_context.h"
 #include "concurrency/calvin_scheduler.h"
@@ -15,6 +15,7 @@
 #include "concurrency/tx_context.h"
 #include "concurrency/tx_coordinator.h"
 #include "concurrency/write_ahead_log.h"
+#include "access/access_mgr.h"
 #include "network/net_service.h"
 #include "network/sender.h"
 #include <boost/date_time.hpp>
@@ -47,7 +48,8 @@ private:
   std::unordered_map<shard_id_t, node_id_t> dsb_shard2node_;
   shard_id_t neighbour_shard_;
   bool registered_;
-  access_mgr *mgr_;
+  lock_mgr_global *mgr_;
+  access_mgr *access_;
   net_service *service_;
 
   std::atomic<uint32_t> sequence_;
@@ -161,6 +163,9 @@ private:
   result<void> ccb_handle_message(const ptr<connection>, message_type,
                                   const ptr<dependency_set>);
 
+  result<void> ccb_handle_message(const ptr<connection> &, message_type, 
+                                  const ptr<tx_enable_violate>);
+
   result<void> ccb_handle_message(const ptr<connection>, message_type,
                                   const ptr<calvin_epoch>);
 
@@ -228,7 +233,13 @@ private:
 
   void handle_tx_tm_end(const tx_tm_end &msg);
 #endif
+#ifdef DB_TYPE_GEO_REP_OPTIMIZE
 
+  void handle_tx_tm_enable_violate(const tx_enable_violate &msg);
+
+  void handle_tx_rm_enable_violate(const tx_enable_violate &msg);
+
+#endif
 #endif // #ifdef DB_TYPE_NON_DETERMINISTIC
 #ifdef DB_TYPE_CALVIN
 

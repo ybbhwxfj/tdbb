@@ -31,10 +31,11 @@ cc_block::cc_block(const config &conf, net_service *service,
       conf_.get_test_config().deadlock_detection_ms(),
       conf_.get_test_config().lock_timeout_ms()
   );
-  mgr_ = new access_mgr(service_, deadlock_.get(), std::move(fn_before),
-                        std::move(fn_after),
-                        conf_.all_shard_ids(),
-                        MAX_TABLES);
+  mgr_ = new lock_mgr_global(service_, deadlock_.get(), std::move(fn_before),
+                             std::move(fn_after),
+                             conf_.all_shard_ids(),
+                             MAX_TABLES);
+  access_ = new access_mgr(conf_.all_shard_ids(), MAX_TABLES);
   BOOST_ASSERT(node_id_ != 0);
   BOOST_ASSERT(rlb_node_id_ != 0);
   auto ids = conf_.shard_ids();
@@ -60,7 +61,10 @@ cc_block::cc_block(const config &conf, net_service *service,
 #endif // DB_TYPE_CALVIN
 }
 
-cc_block::~cc_block() { delete mgr_; }
+cc_block::~cc_block() {
+    delete mgr_;
+    delete access_;
+}
 
 void cc_block::on_start() {
 
@@ -367,7 +371,7 @@ result<void> cc_block::ccb_handle_message(const ptr<connection>, message_type,
   for (const tuple_row &row : resp->tuple_row()) {
     tuple_pb t;
     swap(t, const_cast<tuple_pb &>(row.tuple()));
-    mgr_->put(row.table_id(), row.shard_id(), row.tuple_id(), std::move(t));
+    access_->put(row.table_id(), row.shard_id(), row.tuple_id(), std::move(t));
   }
 
   std::pair<ptr<connection>, bool> pair =
@@ -590,7 +594,9 @@ ptr<tx_context> cc_block::create_tx_context_gut(xid_t xid, bool distributed,
       cc_opt_dsb_node_id_,
       dsb_shard2node_,
       cno_, distributed,
-      mgr_, service_, conn, wal_.get(), fn_remove, deadlock_.get());
+      mgr_,
+      access_,
+      service_, conn, wal_.get(), fn_remove, deadlock_.get());
 
   return ctx;
 }

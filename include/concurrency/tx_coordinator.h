@@ -107,6 +107,8 @@ public:
   uint64_t xid() const { return xid_; }
 
   result<void> handle_tx_request(const tx_request &req);
+  
+  result<void> send_rm_request();
 
   void handle_tx_rm_prepare(const tx_rm_prepare &msg);
 
@@ -138,6 +140,8 @@ private:
 
   void step_tm_state_advance();
 
+  void write_begin_log();
+
   void write_commit_log();
 
   void write_abort_log();
@@ -149,6 +153,8 @@ private:
   void on_aborted();
 
   void on_ended();
+
+  void on_begin();
 
   void send_tx_response();
 
