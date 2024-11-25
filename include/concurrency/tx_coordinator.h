@@ -50,12 +50,16 @@ private:
 
   struct tx_rm_tracer {
     tx_rm_tracer() : lead_(0), rm_state_(RM_IDLE) {
-    }
-
+#ifdef DB_TYPE_GEO_REP_OPTIMIZE
+      violate_ = false;
+#endif // DB_TYPE_GEO_REP_OPTIMIZE    
+  }
     node_id_t lead_;
     tx_rm_state rm_state_;
-
     tx_request message_;
+#ifdef DB_TYPE_GEO_REP_OPTIMIZE
+    bool violate_;
+#endif // DB_TYPE_GEO_REP_OPTIMIZE
   };
 
   uint64_t xid_;
@@ -68,7 +72,7 @@ private:
   std::map<shard_id_t, std::vector<tx_operation>> ops_;
   std::unordered_map<shard_id_t, tx_rm_tracer> rm_tracer_;
   tm_state tm_state_;
-
+  bool write_begin_log_;
   bool write_commit_log_;
   bool write_abort_log_;
   bool write_end_done_{};
@@ -98,9 +102,13 @@ public:
                  net_service *service, ptr<connection> connection,
                  write_ahead_log *write_ahead_log, fn_tm_state fn);
 
+  virtual ~tx_coordinator() = default;
+
   uint64_t xid() const { return xid_; }
 
   result<void> handle_tx_request(const tx_request &req);
+  
+  result<void> send_rm_request();
 
   void handle_tx_rm_prepare(const tx_rm_prepare &msg);
 
@@ -118,6 +126,11 @@ public:
 
   void on_log_entry_commit(tx_cmd_type type);
 
+#ifdef DB_TYPE_GEO_REP_OPTIMIZE
+
+  void handle_tx_enable_violate(const tx_enable_violate &msg);
+
+#endif // DB_TYPE_GEO_REP_OPTIMIZE
 private:
   void send_commit();
 
@@ -126,6 +139,8 @@ private:
   void send_end();
 
   void step_tm_state_advance();
+
+  void write_begin_log();
 
   void write_commit_log();
 
@@ -139,7 +154,15 @@ private:
 
   void on_ended();
 
+  void on_begin();
+
   void send_tx_response();
+
+#ifdef DB_TYPE_GEO_REP_OPTIMIZE
+
+  void send_tx_enable_violate();
+
+#endif // DB_TYPE_GEO_REP_OPTIMIZE
 
 };
 

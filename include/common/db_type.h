@@ -6,7 +6,7 @@
 #define BUILD_SHARED 1
 #define BUILD_SHARE_NOTHING 2
 #define BUILD_CALVIN 3
-#define BUILD_SCR 4
+#define BUILD_GEO_REP_OPTIMIZE 4
 #define BUILD_TK 5
 
 #ifndef DB_BUILD_TYPE
@@ -49,7 +49,7 @@ enum db_type {
   DB_S = BUILD_SHARED,
   DB_SN = BUILD_SHARE_NOTHING,
   DB_D = BUILD_CALVIN,
-  DB_SCR = BUILD_SCR,
+  DB_GRO = BUILD_GEO_REP_OPTIMIZE,
   DB_TK = BUILD_TK,
 };
 
@@ -68,12 +68,17 @@ inline db_type block_db_type() {
 inline bool is_shared() { return block_db_type()==DB_S; }
 
 inline bool is_shared_nothing() {
-  return block_db_type()==DB_SN;
+  return block_db_type() == DB_SN || block_db_type() == DB_GRO;
 }
 
 inline bool is_deterministic() { return block_db_type()==DB_D; }
 
 inline bool is_non_deterministic() { return block_db_type()!=DB_D; }
+
+inline bool is_geo_rep_optimized() {
+  return block_db_type() == DB_GRO;
+}
+
 inline bool is_store_tk() { return block_db_type()==DB_TK; }
 
 inline void set_block_db_type(db_type t) { global_db_type = t; }

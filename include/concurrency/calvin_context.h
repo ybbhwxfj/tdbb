@@ -8,7 +8,7 @@
 #include "common/ptr.hpp"
 #include "common/tuple.h"
 #include "common/tx_log.h"
-#include "concurrency/access_mgr.h"
+#include "concurrency/lock_mgr_global.h"
 #include "concurrency/calvin_epoch_ops.h"
 #include "concurrency/tx.h"
 #include "network/net_service.h"
@@ -42,7 +42,7 @@ private:
   uint64_t cno_;
   ptr<tx_request> ops_request_;
   net_service *service_;
-  access_mgr *access_;
+  lock_mgr_global *access_;
   bool log_committed_;
   tx_response response_;
 
@@ -62,13 +62,13 @@ private:
   ptr<timer> timer_ticker_;
 public:
   calvin_context(
-      boost::asio::io_context::strand s, xid_t xid,
-      node_id_t node_id,
-      std::optional<node_id_t> dsb_node_id,
-      const std::unordered_map<shard_id_t, node_id_t> &shard2node,
-      uint64_t cno,
-      ptr<tx_request> ops, net_service *service, access_mgr *access,
-      fn_calvin_context_remove fn_remove);
+          boost::asio::io_context::strand s, xid_t xid,
+          node_id_t node_id,
+          std::optional<node_id_t> dsb_node_id,
+          const std::unordered_map<shard_id_t, node_id_t> &shard2node,
+          uint64_t cno,
+          ptr<tx_request> ops, net_service *service, lock_mgr_global *access,
+          fn_calvin_context_remove fn_remove);
 
   virtual ~calvin_context() {}
 

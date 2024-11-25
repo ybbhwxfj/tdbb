@@ -31,10 +31,11 @@ cc_block::cc_block(const config &conf, net_service *service,
       conf_.get_test_config().deadlock_detection_ms(),
       conf_.get_test_config().lock_timeout_ms()
   );
-  mgr_ = new access_mgr(service_, deadlock_.get(), std::move(fn_before),
-                        std::move(fn_after),
-                        conf_.all_shard_ids(),
-                        MAX_TABLES);
+  mgr_ = new lock_mgr_global(service_, deadlock_.get(), std::move(fn_before),
+                             std::move(fn_after),
+                             conf_.all_shard_ids(),
+                             MAX_TABLES);
+  access_ = new access_mgr(conf_.all_shard_ids(), MAX_TABLES);
   BOOST_ASSERT(node_id_ != 0);
   BOOST_ASSERT(rlb_node_id_ != 0);
   auto ids = conf_.shard_ids();
@@ -60,7 +61,10 @@ cc_block::cc_block(const config &conf, net_service *service,
 #endif // DB_TYPE_CALVIN
 }
 
-cc_block::~cc_block() { delete mgr_; }
+cc_block::~cc_block() {
+    delete mgr_;
+    delete access_;
+}
 
 void cc_block::on_start() {
 
@@ -367,7 +371,7 @@ result<void> cc_block::ccb_handle_message(const ptr<connection>, message_type,
   for (const tuple_row &row : resp->tuple_row()) {
     tuple_pb t;
     swap(t, const_cast<tuple_pb &>(row.tuple()));
-    mgr_->put(row.table_id(), row.shard_id(), row.tuple_id(), std::move(t));
+    access_->put(row.table_id(), row.shard_id(), row.tuple_id(), std::move(t));
   }
 
   std::pair<ptr<connection>, bool> pair =
@@ -466,6 +470,17 @@ result<void> cc_block::ccb_handle_message(const ptr<connection>, message_type,
                                           const ptr<dependency_set> m) {
   handle_dependency_set(m);
   return outcome::success();
+}
+
+result<void> cc_block::ccb_handle_message(const ptr<connection> &, message_type t, const ptr<tx_enable_violate> m) {
+#ifdef DB_TYPE_GEO_REP_OPTIMIZE
+  if (t == TM_ENABLE_VIOLATE) {
+    handle_tx_tm_enable_violate(*m);
+  } else if (t == RM_ENABLE_VIOLATE) {
+    handle_tx_rm_enable_violate(*m);
+  }
+  return outcome::success();
+#endif //DB_TYPE_GEO_REP_OPTIMIZE
 }
 
 result<void> cc_block::ccb_handle_message(const ptr<connection>, message_type,
@@ -579,7 +594,9 @@ ptr<tx_context> cc_block::create_tx_context_gut(xid_t xid, bool distributed,
       cc_opt_dsb_node_id_,
       dsb_shard2node_,
       cno_, distributed,
-      mgr_, service_, conn, wal_.get(), fn_remove, deadlock_.get());
+      mgr_,
+      access_,
+      service_, conn, wal_.get(), fn_remove, deadlock_.get());
 
   return ctx;
 }
@@ -873,8 +890,41 @@ void cc_block::handle_tx_tm_end(const tx_tm_end &msg) {
   } else {
   }
 }
-#endif // DB_TYPE_SHARE_NOTHING
 
+
+
+#ifdef DB_TYPE_GEO_REP_OPTIMIZE
+void cc_block::handle_tx_tm_enable_violate(const tx_enable_violate &msg) {
+  BOOST_ASSERT(msg.dest() == node_id_);
+  xid_t xid = msg.xid();
+  uint32_t terminal_id = xid_to_terminal_id(xid);
+  std::pair<ptr<tx_context>, bool> r = tx_context_[terminal_id].find(xid);
+  if (r.second) {
+    ptr<tx_context> ctx = r.first;
+    ctx->handle_tx_enable_violate();
+  }
+}
+void cc_block::handle_tx_rm_enable_violate(const tx_enable_violate &msg) {
+  BOOST_ASSERT(msg.dest() == node_id_);
+  xid_t xid = msg.xid();
+  uint32_t terminal_id = xid_to_terminal_id(xid);
+  std::pair<ptr<tx_coordinator>, bool> r = tx_coordinator_[terminal_id].find(xid);
+  if (r.second) {
+    auto tm = r.first;
+    async_run_tx_routine(
+        tm->get_strand(),
+        [tm, msg] {
+          tm->handle_tx_enable_violate(msg);
+        }
+        //BOOST_LOG_TRIVIAL(trace) << "victim tx_rm " << xid;
+    );
+
+  }
+}
+
+#endif // DB_TYPE_GEO_REP_OPTIMIZE
+
+#endif // DB_TYPE_SHARE_NOTHING
 #endif // #ifdef DB_TYPE_NON_DETERMINISTIC
 
 #ifdef DB_TYPE_NON_DETERMINISTIC

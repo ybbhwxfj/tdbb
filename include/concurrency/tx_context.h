@@ -12,11 +12,11 @@
 #include "common/ptr.hpp"
 #include "common/time_tracer.h"
 #include "common/tuple.h"
-#include "concurrency/access_mgr.h"
+#include "concurrency/lock_mgr_global.h"
 #include "concurrency/tx.h"
-
 #include "concurrency/deadlock.h"
 #include "concurrency/write_ahead_log.h"
+#include "access/access_mgr.h"
 #include "network/net_service.h"
 #include "network/sender.h"
 #include "proto/proto.h"
@@ -62,7 +62,8 @@ private:
   node_id_t coord_node_id_;
   oid_t oid_;
   uint32_t max_ops_;
-  access_mgr *mgr_;
+  lock_mgr_global *mgr_;
+  access_mgr *access_;
   net_service *service_;
   std::deque<tx_operation> ops_;
   tx_response response_;
@@ -88,6 +89,15 @@ private:
   deadlock *dl_;
   bool victim_;
 
+#ifdef DB_TYPE_GEO_REP_OPTIMIZE
+  bool dependency_committed_;
+
+  uint64_t dep_in_count_;
+  bool dlv_prepare_;
+  bool dlv_commit_;
+  std::unordered_map<xid_t, ptr<tx_context>> dep_in_set_;
+  std::unordered_map<xid_t, ptr<tx_context>> dep_out_set_;
+#endif // DB_TYPE_GEO_REP_OPTIMIZE  
   time_tracer read_time_tracer_;
   time_tracer append_time_tracer_;
   time_tracer lock_wait_time_tracer_;
@@ -105,7 +115,7 @@ public:
              std::optional<node_id_t> rlb_node_id,
              const std::unordered_map<shard_id_t, node_id_t> &shard2node,
              uint64_t cno, bool distributed,
-             access_mgr *mgr, net_service *sender, ptr<connection> conn,
+             lock_mgr_global *mgr, access_mgr *access, net_service *sender, ptr<connection> conn,
              write_ahead_log *write_ahead_log, fn_tx_state callback,
              deadlock *dl);
 
@@ -219,6 +229,28 @@ private:
 
   void handle_finish_tx_phase1_prepare_abort();
 
+#ifdef DB_TYPE_GEO_REP_OPTIMIZE
+ public:
+  void handle_tx_enable_violate();
+
+ private:
+  void register_dependency(const ptr<tx_context> &out);
+
+  void report_dependency();
+
+  void dependency_commit();
+
+  void dlv_try_tx_commit();
+
+  void dlv_try_tx_prepare_commit();
+
+  void dlv_abort();
+
+  void dlv_make_violable();
+
+  void send_tx_enable_violate();
+
+#endif // DB_TYPE_GEO_REP_OPTIMIZE
 #endif // DB_TYPE_SHARE_NOTHING
   node_id_t shard2node(shard_id_t shard_id);
 };

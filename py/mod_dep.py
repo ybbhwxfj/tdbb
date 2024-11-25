@@ -107,10 +107,33 @@ TIKV_USE = '^\s*use\s*(.*)\s*::\s*'
 TIKV_RE = re.compile(TIKV_USE)
 TIKV_DIR = []
 
+
+
+TDDB_MODULES = {
+    'CCB': [
+        'concurrency'
+    ],
+    'RLB': [
+        'replog',
+        'raft'
+    ],
+    'DSB(access)': [
+        'access',
+        'store'
+    ],
+    'DSB(storage)': [
+        'kv'
+    ]
+}
+TDDB_C_INCLUDE = '^\s*#include\s*"(.*)"\s'
+TDDB_RE = re.compile(TDDB_C_INCLUDE)
+TDDB_DIR = ['src', 'include']
+
 CONFIG = {
     "OB" : {"MODULES":OB_MODULES, "RE":OB_RE, "DIRS": set() },
     "PG" : {"MODULES":PG_MODULES, "RE":PG_RE, "DIRS": set(PG_DIR)},
-    "TIKV": {"MODULES": TIKV_MODULES, "RE": TIKV_RE, "DIRS": set(TIKV_DIR)}
+    "TIKV": {"MODULES": TIKV_MODULES, "RE": TIKV_RE, "DIRS": set(TIKV_DIR)},
+    "TDDB" : {"MODULES":TDDB_MODULES, "RE":TDDB_RE, "DIRS": set(), },
 }
 
 def walk_path(path, db):
@@ -138,7 +161,7 @@ def walk_path(path, db):
             mod = file_mod(relpath, path2mod)
             if mod is None:
                 continue
-            #print(file_path)
+            print(file_path)
             if mod not in mod_dep:
                 mod_dep[mod] = {}
 
@@ -156,6 +179,7 @@ def walk_path(path, db):
                     mod_dep[mod][supplier_mod] = mod_dep[mod][supplier_mod] + 1
                 else:
                     mod_dep[mod][supplier_mod] = 1
+    print(mod_dep)
     gen_dot(mod_dep, db)
 
 def gen_dot(mod_dep, name):
@@ -177,6 +201,7 @@ def gen_dot(mod_dep, name):
 
 def read_file(path, re_pattern):
     vec = []
+    print("file ", path)
     with open(path, encoding='utf-8') as f:
         for line in f:
             m = re.search(re_pattern, line)
@@ -191,9 +216,10 @@ def file_mod(path,  path2mod:Trie):
     path = path.replace("\\", '/')
     try:
         (_, mod) = path2mod.longest_prefix_item(path)
+        print("mod ", path,  mod)
         return mod
     except KeyError as _e:
-        #print ( "no such key: " + str(path))
+        print ( "no such key: " + str(path))
         return None
 
 def module_to_tire(module_dict):

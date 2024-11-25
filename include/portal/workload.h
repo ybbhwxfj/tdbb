@@ -110,10 +110,11 @@ struct tpm_statistic {
 
 struct per_terminal {
   per_terminal(shard_id_t rid, uint32_t tid)
-      : rg_id_(rid), terminal_id_(tid), node_id_(0) {}
+      : rg_id_(rid), terminal_id_(tid), node_id_(0), num_dist_(0) {}
 
   shard_id_t rg_id_;
   uint32_t terminal_id_;
+  uint32_t num_dist_;
   node_id_t node_id_;
   ptr<db_client> client_conn_;
   std::vector<tx_request> requests_;

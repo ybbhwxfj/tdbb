@@ -4,6 +4,7 @@ set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
 set(CMAKE_VERBOSE_MAKEFILE ON)
 
 add_subdirectory(proto) # build proto first
+add_subdirectory(access)
 add_subdirectory(common)
 add_subdirectory(concurrency)
 add_subdirectory(network)

@@ -29,7 +29,6 @@ add_library(
         portal
         portal_server.cpp
         portal_client.cpp
-        block_client.cpp
         workload.cpp
 )
 
@@ -37,7 +36,6 @@ add_executable(
         block-client
         main_fe.cpp
         portal_client.cpp
-        block_client.cpp
         workload.cpp)
 
 target_link_libraries(
